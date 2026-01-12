@@ -28,24 +28,53 @@ export async function POST(request: NextRequest) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
       const orderId = session.metadata?.orderId;
+      const createAccount = session.metadata?.createAccount === "true";
       const customerEmail = session.customer_details?.email;
 
-      if (orderId) {
-        // Find user by email if order doesn't have userId yet
-        let userId: string | null = null;
-        if (customerEmail) {
-          const user = await prisma.user.findUnique({
-            where: { email: customerEmail },
+      if (orderId && customerEmail) {
+        // Check if user exists or needs to be created
+        let user = await prisma.user.findUnique({
+          where: { email: customerEmail },
+        });
+
+        // Create account if requested and user doesn't exist
+        if (!user && createAccount) {
+          // Get shipping info from the order to populate profile
+          const order = await prisma.order.findUnique({
+            where: { id: orderId },
+            select: {
+              shippingName: true,
+              shippingPhone: true,
+              shippingAddress1: true,
+              shippingAddress2: true,
+              shippingCity: true,
+              shippingState: true,
+              shippingZip: true,
+              shippingCountry: true,
+            },
           });
-          userId = user?.id || null;
+
+          user = await prisma.user.create({
+            data: {
+              email: customerEmail,
+              name: order?.shippingName,
+              phone: order?.shippingPhone,
+              address1: order?.shippingAddress1,
+              address2: order?.shippingAddress2,
+              city: order?.shippingCity,
+              state: order?.shippingState,
+              zip: order?.shippingZip,
+              country: order?.shippingCountry,
+            },
+          });
         }
 
         await prisma.order.update({
           where: { id: orderId },
           data: {
             status: "PAID",
-            customerEmail: customerEmail || "",
-            ...(userId && { userId }),
+            customerEmail,
+            ...(user && { userId: user.id }),
           },
         });
       }

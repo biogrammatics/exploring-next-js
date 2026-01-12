@@ -4,15 +4,16 @@ import { prisma } from "@/lib/db";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
+  const { id } = await params;
   const product = await prisma.product.findUnique({
-    where: { id: params.id },
+    where: { id },
   });
 
   if (!product) {
@@ -24,17 +25,18 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
+  const { id } = await params;
   const data = await request.json();
 
   const product = await prisma.product.update({
-    where: { id: params.id },
+    where: { id },
     data: {
       name: data.name,
       description: data.description,
@@ -49,15 +51,16 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
+  const { id } = await params;
   await prisma.product.delete({
-    where: { id: params.id },
+    where: { id },
   });
 
   return NextResponse.json({ success: true });

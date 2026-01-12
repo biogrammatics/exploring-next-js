@@ -4,15 +4,16 @@ import { prisma } from "@/lib/db";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
+  const { id } = await params;
   const order = await prisma.order.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       user: true,
       items: {
@@ -30,17 +31,18 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
+  const { id } = await params;
   const data = await request.json();
 
   const order = await prisma.order.update({
-    where: { id: params.id },
+    where: { id },
     data: {
       status: data.status,
     },

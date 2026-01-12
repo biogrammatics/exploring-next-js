@@ -6,10 +6,11 @@ import { OrderStatusForm } from "./order-status-form";
 export default async function AdminOrderDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const order = await prisma.order.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       user: true,
       items: {

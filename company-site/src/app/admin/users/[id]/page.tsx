@@ -5,10 +5,11 @@ import { notFound } from "next/navigation";
 export default async function AdminUserDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const user = await prisma.user.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       orders: {
         orderBy: { createdAt: "desc" },

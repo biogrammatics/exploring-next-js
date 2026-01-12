@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useCart } from "@/app/components/cart/cart-context";
 
 type Product = {
   id: string;
@@ -11,30 +12,18 @@ type Product = {
 };
 
 export function ProductCard({ product }: { product: Product }) {
-  const [loading, setLoading] = useState(false);
+  const [added, setAdded] = useState(false);
+  const { addItem } = useCart();
 
-  const handleBuy = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: [{ productId: product.id, quantity: 1 }],
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (error) {
-      console.error("Checkout error:", error);
-      alert("Failed to start checkout");
-    } finally {
-      setLoading(false);
-    }
+  const handleAddToCart = () => {
+    addItem({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      imageUrl: product.imageUrl,
+    });
+    setAdded(true);
+    setTimeout(() => setAdded(false), 2000);
   };
 
   const formatPrice = (cents: number) => {
@@ -61,11 +50,14 @@ export function ProductCard({ product }: { product: Product }) {
         <div className="flex items-center justify-between">
           <span className="text-2xl font-bold">{formatPrice(product.price)}</span>
           <button
-            onClick={handleBuy}
-            disabled={loading}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleAddToCart}
+            className={`px-4 py-2 rounded transition-colors ${
+              added
+                ? "bg-green-600 text-white"
+                : "bg-blue-600 text-white hover:bg-blue-700"
+            }`}
           >
-            {loading ? "Loading..." : "Buy Now"}
+            {added ? "Added!" : "Add to Cart"}
           </button>
         </div>
       </div>

@@ -4,15 +4,16 @@ import { prisma } from "@/lib/db";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
+  const { id } = await params;
   const user = await prisma.user.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       orders: {
         orderBy: { createdAt: "desc" },

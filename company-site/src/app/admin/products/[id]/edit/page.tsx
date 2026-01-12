@@ -6,10 +6,11 @@ import { ProductForm } from "@/app/components/admin/product-form";
 export default async function EditProductPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const product = await prisma.product.findUnique({
-    where: { id: params.id },
+    where: { id },
   });
 
   if (!product) {

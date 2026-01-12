@@ -3,10 +3,26 @@ import { prisma } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { auth } from "@/lib/auth";
 
+interface ShippingAddress {
+  name: string;
+  email: string;
+  phone: string;
+  address1: string;
+  address2: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
-    const { items } = await request.json();
+    const { items, shipping, createAccount } = await request.json() as {
+      items: { productId: string; quantity: number }[];
+      shipping?: ShippingAddress;
+      createAccount?: boolean;
+    };
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
@@ -15,8 +31,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Require shipping info for new checkout flow
+    if (!shipping?.email) {
+      return NextResponse.json(
+        { error: "Email is required" },
+        { status: 400 }
+      );
+    }
+
     // Fetch products from database
-    const productIds = items.map((item: { productId: string }) => item.productId);
+    const productIds = items.map((item) => item.productId);
     const products = await prisma.product.findMany({
       where: { id: { in: productIds }, active: true },
     });
@@ -29,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build line items for Stripe
-    const lineItems = items.map((item: { productId: string; quantity: number }) => {
+    const lineItems = items.map((item) => {
       const product = products.find((p) => p.id === item.productId)!;
       return {
         price_data: {
@@ -46,19 +70,27 @@ export async function POST(request: NextRequest) {
     });
 
     // Calculate total
-    const total = items.reduce((sum: number, item: { productId: string; quantity: number }) => {
+    const total = items.reduce((sum, item) => {
       const product = products.find((p) => p.id === item.productId)!;
       return sum + product.price * item.quantity;
     }, 0);
 
-    // Create pending order (link to user if authenticated)
+    // Create pending order with shipping address
     const order = await prisma.order.create({
       data: {
-        customerEmail: session?.user?.email || "",
+        customerEmail: shipping.email,
         userId: session?.user?.id || null,
         total,
+        shippingName: shipping.name,
+        shippingPhone: shipping.phone,
+        shippingAddress1: shipping.address1,
+        shippingAddress2: shipping.address2,
+        shippingCity: shipping.city,
+        shippingState: shipping.state,
+        shippingZip: shipping.zip,
+        shippingCountry: shipping.country,
         items: {
-          create: items.map((item: { productId: string; quantity: number }) => {
+          create: items.map((item) => {
             const product = products.find((p) => p.id === item.productId)!;
             return {
               productId: item.productId,
@@ -77,9 +109,10 @@ export async function POST(request: NextRequest) {
       mode: "payment",
       success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/checkout/cancelled`,
-      customer_email: session?.user?.email || undefined,
+      customer_email: shipping.email,
       metadata: {
         orderId: order.id,
+        createAccount: createAccount ? "true" : "false",
       },
     });
 
