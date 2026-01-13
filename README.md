@@ -1,6 +1,6 @@
 # Company Site - E-Commerce Platform
 
-A full-stack e-commerce platform built with Next.js 16, featuring product management, Stripe payments, and passwordless authentication.
+A full-stack e-commerce platform built with Next.js 16, featuring product management, shopping cart, Stripe payments, and passwordless authentication.
 
 ## Tech Stack
 
@@ -12,13 +12,22 @@ A full-stack e-commerce platform built with Next.js 16, featuring product manage
 
 ## Features
 
-### Public
-- Product catalog with browsing and purchasing
-- Guest checkout support
-- Stripe-powered payment flow
+### Shopping Experience
+- Product catalog with browsing
+- Shopping cart with localStorage persistence (works for guests)
+- Add to cart functionality with quantity management
+- Cart icon with item count badge in header
+
+### Checkout
+- Full checkout flow with shipping address collection
+- Guest checkout (no account required)
+- Option to create account during checkout
+- Pre-filled address for logged-in users
+- Stripe-powered secure payment
 
 ### User Account
 - Passwordless email authentication (magic links)
+- Profile management (name, phone, shipping address)
 - Order history and tracking
 - Account dashboard
 
@@ -26,19 +35,24 @@ A full-stack e-commerce platform built with Next.js 16, featuring product manage
 - Product management (CRUD, active/inactive toggle)
 - Order management with status updates
 - User management and role assignment
+- View shipping addresses on orders
 
 ## Project Structure
 
 ```
 company-site/
 ├── src/
-│   ├── app/                    # Next.js App Router
+│   ├── app/
 │   │   ├── (auth pages)        # Sign-in, verify, error
 │   │   ├── account/            # User account & orders
 │   │   ├── admin/              # Admin dashboard
 │   │   ├── api/                # API routes
-│   │   ├── checkout/           # Success/cancelled pages
-│   │   ├── components/         # React components
+│   │   ├── cart/               # Shopping cart page
+│   │   ├── checkout/           # Checkout flow & results
+│   │   ├── components/
+│   │   │   ├── account/        # Profile form
+│   │   │   ├── auth/           # Auth components
+│   │   │   └── cart/           # Cart context & UI
 │   │   └── products/           # Product catalog
 │   └── lib/                    # Utilities (auth, db, stripe)
 ├── prisma/
@@ -128,17 +142,34 @@ npm run db:studio   # Open Prisma Studio GUI
 
 ## Data Models
 
-- **User**: Authentication, roles (USER/ADMIN)
+- **User**: Authentication, roles (USER/ADMIN), profile with shipping address
 - **Product**: Name, description, price, image, active status
-- **Order**: Status tracking, Stripe session linking
+- **Order**: Status tracking, Stripe session, shipping address
 - **OrderItem**: Line items with quantity and pricing
 
 Order statuses: `PENDING` → `PAID` → `SHIPPED` → `DELIVERED` (or `CANCELLED`)
 
+## User Flows
+
+### Guest Checkout
+1. Browse products and add to cart
+2. Go to checkout, enter email and shipping address
+3. Optionally check "Create an account"
+4. Complete payment via Stripe
+5. If account creation was selected, account is created with shipping info
+
+### Registered User Checkout
+1. Sign in via magic link
+2. Browse products and add to cart
+3. Go to checkout (address pre-filled from profile)
+4. Complete payment via Stripe
+5. View order in account dashboard
+
 ## Architecture Notes
 
 - Server-side rendering for fast initial loads
-- Middleware-based route protection for `/admin` and `/account`
+- Layout-level route protection for `/admin` and `/account`
+- Cart state managed via React Context with localStorage persistence
 - Webhook-driven order updates from Stripe
 - Guest orders automatically linked to accounts on registration
 - Prices stored in cents for accuracy

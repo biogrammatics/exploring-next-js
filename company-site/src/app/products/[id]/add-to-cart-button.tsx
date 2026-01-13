@@ -53,10 +53,10 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
       <div className="flex gap-4">
         <button
           onClick={handleAddToCart}
-          className={`flex-1 py-3 px-6 rounded-lg font-medium transition-colors ${
+          className={`flex-1 py-3 px-6 rounded-lg font-medium transition-all ${
             added
-              ? "bg-green-600 text-white"
-              : "bg-blue-600 text-white hover:bg-blue-700"
+              ? "bg-green-500 text-white shadow-lg"
+              : "glass-button text-white"
           }`}
         >
           {added ? "Added to Cart!" : "Add to Cart"}
@@ -64,7 +64,7 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
 
         <button
           onClick={handleBuyNow}
-          className="flex-1 py-3 px-6 rounded-lg font-medium border-2 border-blue-600 text-blue-600 hover:bg-blue-50 transition-colors"
+          className="flex-1 py-3 px-6 rounded-lg font-medium bg-white/30 backdrop-blur border border-white/40 text-gray-800 hover:bg-white/40 transition-all"
         >
           Buy Now
         </button>

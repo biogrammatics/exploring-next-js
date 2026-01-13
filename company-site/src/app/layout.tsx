@@ -34,10 +34,10 @@ export default function RootLayout({
       >
         <AuthSessionProvider>
           <CartProvider>
-            <header className="border-b">
+            <header className="glass-nav sticky top-0 z-50">
               <nav className="container mx-auto px-4 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-6">
-                  <Link href="/" className="text-xl font-bold">
+                  <Link href="/" className="text-xl font-bold text-gray-800">
                     Company
                   </Link>
                   <Link

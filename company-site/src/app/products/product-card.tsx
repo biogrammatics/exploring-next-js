@@ -38,7 +38,7 @@ export function ProductCard({ product }: { product: Product }) {
   return (
     <Link
       href={`/products/${product.id}`}
-      className="block border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+      className="block glass-card overflow-hidden"
     >
       {product.imageUrl && (
         <img
@@ -48,18 +48,18 @@ export function ProductCard({ product }: { product: Product }) {
         />
       )}
       <div className="p-4">
-        <h2 className="text-xl font-semibold mb-2">{product.name}</h2>
+        <h2 className="text-xl font-semibold mb-2 text-gray-800">{product.name}</h2>
         {product.description && (
           <p className="text-gray-600 mb-4 line-clamp-2">{product.description}</p>
         )}
         <div className="flex items-center justify-between">
-          <span className="text-2xl font-bold">{formatPrice(product.price)}</span>
+          <span className="text-2xl font-bold text-gray-800">{formatPrice(product.price)}</span>
           <button
             onClick={handleAddToCart}
-            className={`px-4 py-2 rounded transition-colors ${
+            className={`px-4 py-2 rounded-lg font-medium transition-all ${
               added
-                ? "bg-green-600 text-white"
-                : "bg-blue-600 text-white hover:bg-blue-700"
+                ? "bg-green-500 text-white shadow-lg"
+                : "glass-button text-white"
             }`}
           >
             {added ? "Added!" : "Add to Cart"}

@@ -17,12 +17,12 @@ export default function CartPage() {
   if (items.length === 0) {
     return (
       <main className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-8">Shopping Cart</h1>
-        <div className="text-center py-12">
-          <p className="text-gray-500 mb-4">Your cart is empty</p>
+        <h1 className="text-3xl font-bold mb-8 text-white drop-shadow-lg">Shopping Cart</h1>
+        <div className="glass-panel text-center py-12">
+          <p className="text-gray-600 mb-4">Your cart is empty</p>
           <Link
             href="/products"
-            className="inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+            className="inline-block glass-button text-white px-6 py-2 rounded-lg"
           >
             Browse Products
           </Link>
@@ -33,11 +33,11 @@ export default function CartPage() {
 
   return (
     <main className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Shopping Cart</h1>
+      <h1 className="text-3xl font-bold mb-8 text-white drop-shadow-lg">Shopping Cart</h1>
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="border rounded-lg divide-y">
+          <div className="glass-panel divide-y divide-white/20">
             {items.map((item) => (
               <div key={item.id} className="p-4 flex gap-4">
                 {item.imageUrl && (
@@ -88,8 +88,8 @@ export default function CartPage() {
         </div>
 
         <div>
-          <div className="border rounded-lg p-6 sticky top-4">
-            <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
+          <div className="glass-panel p-6 sticky top-20">
+            <h2 className="text-lg font-semibold mb-4 text-gray-800">Order Summary</h2>
             <div className="space-y-2 mb-4">
               <div className="flex justify-between">
                 <span className="text-gray-600">Subtotal</span>
@@ -108,7 +108,7 @@ export default function CartPage() {
             </div>
             <Link
               href="/checkout"
-              className="block w-full bg-blue-600 text-white text-center py-3 rounded-lg hover:bg-blue-700 font-medium"
+              className="block w-full glass-button text-white text-center py-3 rounded-lg font-medium"
             >
               Proceed to Checkout
             </Link>

@@ -9,7 +9,7 @@ export default async function ProductsPage() {
 
   return (
     <main className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Our Products</h1>
+      <h1 className="text-3xl font-bold mb-8 text-white drop-shadow-lg">Our Products</h1>
 
       {products.length === 0 ? (
         <p className="text-gray-500">No products available yet.</p>
