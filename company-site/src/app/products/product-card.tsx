@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useCart } from "@/app/components/cart/cart-context";
 
 type Product = {
@@ -15,7 +16,8 @@ export function ProductCard({ product }: { product: Product }) {
   const [added, setAdded] = useState(false);
   const { addItem } = useCart();
 
-  const handleAddToCart = () => {
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.preventDefault();
     addItem({
       id: product.id,
       name: product.name,
@@ -34,7 +36,10 @@ export function ProductCard({ product }: { product: Product }) {
   };
 
   return (
-    <div className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+    <Link
+      href={`/products/${product.id}`}
+      className="block border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+    >
       {product.imageUrl && (
         <img
           src={product.imageUrl}
@@ -45,7 +50,7 @@ export function ProductCard({ product }: { product: Product }) {
       <div className="p-4">
         <h2 className="text-xl font-semibold mb-2">{product.name}</h2>
         {product.description && (
-          <p className="text-gray-600 mb-4">{product.description}</p>
+          <p className="text-gray-600 mb-4 line-clamp-2">{product.description}</p>
         )}
         <div className="flex items-center justify-between">
           <span className="text-2xl font-bold">{formatPrice(product.price)}</span>
@@ -61,6 +66,6 @@ export function ProductCard({ product }: { product: Product }) {
           </button>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
