@@ -5,6 +5,7 @@ import Resend from "next-auth/providers/resend";
 // Note: Admin role check is done in the admin layout, not here,
 // because Edge runtime can't access the database
 export const authConfig: NextAuthConfig = {
+  trustHost: true,
   providers: [
     Resend({
       apiKey: process.env.RESEND_API_KEY,
