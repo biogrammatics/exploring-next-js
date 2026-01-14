@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
       data: {
         customerEmail: shipping.email,
         userId: session?.user?.id || null,
+        subtotal: total,
         total,
         shippingName: shipping.name,
         shippingPhone: shipping.phone,

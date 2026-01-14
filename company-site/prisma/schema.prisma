@@ -7,7 +7,10 @@ datasource db {
   provider = "postgresql"
 }
 
-// Auth models
+// ============================================================================
+// AUTH MODELS
+// ============================================================================
+
 enum Role {
   USER
   ADMIN
@@ -24,17 +27,36 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   // Profile fields
-  phone         String?
-  address1      String?
-  address2      String?
-  city          String?
-  state         String?
-  zip           String?
-  country       String?
+  firstName String?
+  lastName  String?
+  phone     String?
+  address1  String?
+  address2  String?
+  city      String?
+  state     String?
+  zip       String?
+  country   String?
 
+  // Twist Bioscience integration
+  twistUsername String?
+
+  // NextAuth relations
   accounts Account[]
   sessions Session[]
-  orders   Order[]
+
+  // E-commerce relations
+  orders    Order[]
+  addresses Address[]
+
+  // Subscription relations
+  subscriptions Subscription[]
+
+  // Custom project relations
+  customProjects CustomProject[]
+
+  // Service pathway relations
+  pathwaySelections PathwaySelection[]
+  serviceQuotes     ServiceQuote[]
 }
 
 model Account {
@@ -72,12 +94,177 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// E-commerce models
+// ============================================================================
+// ADDRESS MODEL (Multiple addresses per user)
+// ============================================================================
+
+enum AddressType {
+  BILLING
+  SHIPPING
+}
+
+model Address {
+  id          String      @id @default(cuid())
+  userId      String
+  addressType AddressType
+  isDefault   Boolean     @default(false)
+
+  firstName    String
+  lastName     String
+  company      String?
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  state        String?
+  postalCode   String
+  country      String
+  phone        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, addressType])
+}
+
+// ============================================================================
+// PRODUCT TAXONOMY MODELS (Reference Data)
+// ============================================================================
+
+model ProductStatus {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  isAvailable Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vectors       Vector[]
+  pichiaStrains PichiaStrain[]
+}
+
+model HostOrganism {
+  id              String  @id @default(cuid())
+  commonName      String
+  scientificName  String?
+  description     String?
+  optimalConditions String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vectors Vector[]
+
+  @@index([commonName])
+}
+
+enum PromoterStrength {
+  WEAK
+  MEDIUM
+  STRONG
+  VERY_STRONG
+}
+
+model Promoter {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  fullName    String?
+  description String?
+  inducible   Boolean          @default(false)
+  strength    PromoterStrength?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vectors Vector[]
+}
+
+model SelectionMarker {
+  id            String  @id @default(cuid())
+  name          String  @unique
+  resistance    String?
+  concentration String?
+  description   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vectors Vector[]
+}
+
+model VectorType {
+  id           String  @id @default(cuid())
+  name         String  @unique
+  description  String?
+  applications String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vectors Vector[]
+}
+
+model StrainType {
+  id           String  @id @default(cuid())
+  name         String  @unique
+  description  String?
+  applications String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pichiaStrains PichiaStrain[]
+}
+
+model SecretionSignal {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  sequence    String
+  organism    String  @default("Pichia pastoris")
+  description String?
+  active      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+  @@index([organism])
+}
+
+enum TagType {
+  N_TERMINAL
+  C_TERMINAL
+  BOTH
+}
+
+model ProteinTag {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  sequence    String
+  tagType     TagType
+  description String?
+  active      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+  @@index([tagType])
+}
+
+// ============================================================================
+// PRODUCT MODELS
+// ============================================================================
+
+// Keep the original generic Product for backward compatibility
 model Product {
   id          String   @id @default(cuid())
   name        String
   description String?
-  price       Int      // Price in cents
+  price       Int // Price in cents
   imageUrl    String?
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -86,14 +273,135 @@ model Product {
   orderItems OrderItem[]
 }
 
+enum VectorCategory {
+  HETEROLOGOUS_PROTEIN_EXPRESSION
+  GENOME_ENGINEERING
+}
+
+model Vector {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  description String?
+  category    VectorCategory?
+
+  // Availability flags
+  availableForSale         Boolean @default(true)
+  availableForSubscription Boolean @default(true)
+
+  // Pricing (stored in cents)
+  salePrice         Int?
+  subscriptionPrice Int?
+
+  // Technical details
+  hasLoxSites Boolean @default(false)
+  vectorSize  Int? // Base pairs
+  features    String?
+
+  // File storage (URL-based for Next.js)
+  snapgeneFileUrl  String?
+  snapgeneFileName String?
+  snapgeneFileSize Int?
+
+  // Relations to taxonomy
+  promoterId        String?
+  selectionMarkerId String?
+  vectorTypeId      String?
+  hostOrganismId    String?
+  productStatusId   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  promoter        Promoter?        @relation(fields: [promoterId], references: [id])
+  selectionMarker SelectionMarker? @relation(fields: [selectionMarkerId], references: [id])
+  vectorType      VectorType?      @relation(fields: [vectorTypeId], references: [id])
+  hostOrganism    HostOrganism?    @relation(fields: [hostOrganismId], references: [id])
+  productStatus   ProductStatus    @relation(fields: [productStatusId], references: [id])
+
+  // Reverse relations
+  subscriptionVectors SubscriptionVector[]
+  customProjects      CustomProject[]
+  vectorOrderItems    VectorOrderItem[]
+
+  @@index([category])
+  @@index([availableForSale])
+  @@index([availableForSubscription])
+  @@index([productStatusId])
+  @@index([promoterId])
+  @@index([hostOrganismId])
+}
+
+model PichiaStrain {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+
+  // Biological details
+  genotype    String?
+  phenotype   String?
+  advantages  String?
+  applications String?
+
+  // Pricing (stored in cents)
+  salePrice Int?
+
+  // Availability and storage
+  availability        String?
+  shippingRequirements String?
+  storageConditions   String?
+  viabilityPeriod     String?
+  cultureMedia        String?
+  growthConditions    String?
+  citations           String?
+
+  // File storage
+  hasFiles  Boolean @default(false)
+  fileNotes String?
+
+  // Relations
+  strainTypeId    String?
+  productStatusId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  strainType    StrainType?   @relation(fields: [strainTypeId], references: [id])
+  productStatus ProductStatus @relation(fields: [productStatusId], references: [id])
+
+  // Reverse relations
+  strainOrderItems StrainOrderItem[]
+
+  @@index([name])
+  @@index([availability])
+  @@index([productStatusId])
+  @@index([strainTypeId])
+}
+
+// ============================================================================
+// E-COMMERCE MODELS
+// ============================================================================
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
 model Order {
   id              String      @id @default(cuid())
+  orderNumber     String      @unique @default(cuid())
   status          OrderStatus @default(PENDING)
   customerEmail   String
   stripeSessionId String?     @unique
-  total           Int         // Total in cents
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+
+  // Totals (in cents)
+  subtotal     Int
+  shippingCost Int @default(0)
+  taxAmount    Int @default(0)
+  total        Int
 
   // Shipping address (captured at checkout)
   shippingName     String?
@@ -105,31 +413,359 @@ model Order {
   shippingZip      String?
   shippingCountry  String?
 
+  // Billing address
+  billingName     String?
+  billingPhone    String?
+  billingAddress1 String?
+  billingAddress2 String?
+  billingCity     String?
+  billingState    String?
+  billingZip      String?
+  billingCountry  String?
+
+  notes     String?
+  orderedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // User relation (optional for guest checkout)
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
-  items OrderItem[]
+  // Order items - support multiple product types
+  items            OrderItem[]
+  vectorOrderItems VectorOrderItem[]
+  strainOrderItems StrainOrderItem[]
 
   @@index([userId])
   @@index([customerEmail])
+  @@index([orderNumber])
+  @@index([status])
 }
 
+// Generic product order item (for backward compatibility)
 model OrderItem {
-  id        String @id @default(cuid())
-  quantity  Int
-  price     Int    // Price at time of purchase (in cents)
+  id       String @id @default(cuid())
+  quantity Int
+  price    Int // Price at time of purchase (in cents)
 
   orderId   String
-  order     Order   @relation(fields: [orderId], references: [id])
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId String
   product   Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
 }
 
-enum OrderStatus {
+// Vector-specific order item
+model VectorOrderItem {
+  id       String @id @default(cuid())
+  quantity Int
+  price    Int // Price at time of purchase (in cents)
+
+  orderId  String
+  order    Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  vectorId String
+  vector   Vector @relation(fields: [vectorId], references: [id])
+
+  @@index([orderId])
+  @@index([vectorId])
+}
+
+// Strain-specific order item
+model StrainOrderItem {
+  id       String @id @default(cuid())
+  quantity Int
+  price    Int // Price at time of purchase (in cents)
+
+  orderId  String
+  order    Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  strainId String
+  strain   PichiaStrain @relation(fields: [strainId], references: [id])
+
+  @@index([orderId])
+  @@index([strainId])
+}
+
+// ============================================================================
+// SUBSCRIPTION MODELS (Twist Bioscience Integration)
+// ============================================================================
+
+enum SubscriptionStatus {
   PENDING
-  PAID
-  SHIPPED
-  DELIVERED
+  ACTIVE
+  EXPIRED
   CANCELLED
+}
+
+model Subscription {
+  id            String             @id @default(cuid())
+  twistUsername String?
+  status        SubscriptionStatus @default(PENDING)
+
+  // Fees (in cents)
+  onboardingFee     Int @default(30000) // $300.00
+  minimumProratedFee Int @default(5000)  // $50.00
+
+  startedAt   DateTime?
+  renewalDate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  subscriptionVectors SubscriptionVector[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model SubscriptionVector {
+  id            String   @id @default(cuid())
+  addedAt       DateTime @default(now())
+  proratedAmount Int?    // In cents
+
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  vectorId       String
+  vector         Vector       @relation(fields: [vectorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([subscriptionId, vectorId])
+  @@index([subscriptionId])
+  @@index([vectorId])
+}
+
+// ============================================================================
+// CUSTOM PROJECT MODELS
+// ============================================================================
+
+enum ProjectType {
+  STRAIN_ONLY
+  STRAIN_AND_TESTING
+  FULL_SERVICE
+  CONSULTATION
+  PROTEIN_EXPRESSION
+}
+
+enum ProjectStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  AWAITING_APPROVAL
+  SEQUENCE_APPROVED
+}
+
+enum DeliveryFormat {
+  PLATE
+  GLYCEROL_STOCKS
+}
+
+model CustomProject {
+  id          String        @id @default(cuid())
+  projectName String
+  projectType ProjectType?
+  description String?
+  status      ProjectStatus @default(PENDING)
+  notes       String?
+
+  // Cost estimation (in cents)
+  estimatedCost           Int?
+  estimatedCompletionDate DateTime?
+
+  // Service flags
+  strainGeneration        Boolean @default(false)
+  expressionTesting       Boolean @default(false)
+  copyNumberDetermination Boolean @default(false)
+  glycerolStocks          Boolean @default(false)
+
+  // DNA sequence fields
+  aminoAcidSequence      String?
+  dnaSequence            String?
+  dnaSequenceApproved    Boolean @default(false)
+  codonOptimizationNotes String?
+
+  // Protein info (for single-protein projects)
+  proteinName           String?
+  proteinMolecularWeight Float?
+  proteinDescription    String?
+
+  // FASTA processing
+  fastaFileUrl        String?
+  fastaProcessed      Boolean @default(false)
+  fastaProcessingNotes String?
+
+  // Custom strain options
+  customStrainName String?
+  deliveryFormat   DeliveryFormat @default(PLATE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  userId           String
+  user             User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  selectedVectorId String?
+  selectedVector   Vector? @relation(fields: [selectedVectorId], references: [id])
+
+  proteins Protein[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([projectType])
+  @@index([selectedVectorId])
+}
+
+model Protein {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  // Sequence data
+  aminoAcidSequence String
+  originalSequence  String?
+  dnaSequence       String?
+
+  // Modifications
+  secretionSignal String?
+  nTerminalTag    String?
+  cTerminalTag    String?
+
+  // Calculated
+  molecularWeight Float?
+  sequenceOrder   Int    @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customProjectId String
+  customProject   CustomProject @relation(fields: [customProjectId], references: [id], onDelete: Cascade)
+
+  @@index([customProjectId])
+  @@index([customProjectId, sequenceOrder])
+}
+
+// ============================================================================
+// SERVICE PATHWAY MODELS (6-Step Funnel)
+// ============================================================================
+
+model ServicePackage {
+  id         String @id @default(cuid())
+  name       String
+  slug       String @unique
+  stepNumber Int
+
+  description     String?
+  diyOption       String?
+  serviceOption   String?
+  diyChallenges   String?
+  serviceBenefits String?
+  whatsIncluded   String?
+
+  // Pricing (in cents)
+  estimatedPrice     Int?
+  estimatedTurnaround String?
+
+  active   Boolean @default(true)
+  position Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pathwaySelections PathwaySelection[]
+
+  @@index([stepNumber])
+  @@index([active])
+  @@index([position])
+}
+
+enum SelectionType {
+  DIY
+  SERVICE
+}
+
+enum PathwayStatus {
+  IN_PROGRESS
+  COMPLETED
+  QUOTED
+}
+
+model PathwaySelection {
+  id            String        @id @default(cuid())
+  sessionId     String? // For anonymous users
+  stepNumber    Int
+  selectionType SelectionType
+  notes         String?
+  status        PathwayStatus @default(IN_PROGRESS)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId           String?
+  user             User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  servicePackageId String?
+  servicePackage   ServicePackage? @relation(fields: [servicePackageId], references: [id])
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([status])
+  @@index([servicePackageId])
+}
+
+enum QuoteStatus {
+  PENDING
+  CONTACTED
+  QUOTED
+  CONVERTED
+  DECLINED
+}
+
+model ServiceQuote {
+  id          String @id @default(cuid())
+  quoteNumber String @unique @default(cuid())
+  sessionId   String?
+
+  // Contact info
+  emailAddress String
+  fullName     String?
+  organization String?
+  phoneNumber  String?
+
+  // Project details
+  projectName       String?
+  targetProteinName String?
+  proteinTags       String?
+  specialRequirements String?
+  notes             String?
+
+  // Selected services (JSON array)
+  selectedServices Json?
+
+  // Pricing (in cents)
+  estimatedTotal Int?
+
+  // Status tracking
+  status      QuoteStatus @default(PENDING)
+  contactedAt DateTime?
+  quotedAt    DateTime?
+  adminNotes  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([emailAddress])
+  @@index([status])
+  @@index([quoteNumber])
 }
