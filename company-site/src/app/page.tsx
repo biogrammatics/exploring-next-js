@@ -19,7 +19,7 @@ export default function Home() {
             Browse Vectors
           </Link>
           <Link
-            href="/pichia_strains"
+            href="/strains"
             className="px-8 py-3 rounded-lg text-lg bg-white/20 backdrop-blur border border-white/30 text-white hover:bg-white/30 transition-all"
           >
             View Strains
