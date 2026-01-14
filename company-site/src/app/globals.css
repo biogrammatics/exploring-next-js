@@ -20,10 +20,101 @@
 }
 
 html {
-  /* Override Tailwind's default white background */
+  min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
-  min-height: 100vh;
+}
+
+/* Rotating gradient backgrounds with smooth opacity fades */
+.gradient-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+}
+
+.gradient-bg::before,
+.gradient-bg::after,
+.gradient-bg .g1,
+.gradient-bg .g2,
+.gradient-bg .g3,
+.gradient-bg .g4,
+.gradient-bg .g5 {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 2s ease-in-out;
+}
+
+.gradient-bg::before {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  animation: fade1 35s ease-in-out infinite;
+}
+
+.gradient-bg::after {
+  background: linear-gradient(135deg, #0093E9 0%, #80D0C7 100%);
+  animation: fade2 35s ease-in-out infinite;
+}
+
+.gradient-bg .g1 {
+  background: linear-gradient(135deg, #FA8BFF 0%, #2BD2FF 50%, #2BFF88 100%);
+  animation: fade3 35s ease-in-out infinite;
+}
+
+.gradient-bg .g2 {
+  background: linear-gradient(135deg, #1a2a6c 0%, #b21f1f 50%, #fdbb2d 100%);
+  animation: fade4 35s ease-in-out infinite;
+}
+
+.gradient-bg .g3 {
+  background: linear-gradient(135deg, #43cea2 0%, #185a9d 100%);
+  animation: fade5 35s ease-in-out infinite;
+}
+
+.gradient-bg .g4 {
+  background: linear-gradient(135deg, #ee9ca7 0%, #ffdde1 50%, #96e6a1 100%);
+  animation: fade6 35s ease-in-out infinite;
+}
+
+.gradient-bg .g5 {
+  background: linear-gradient(135deg, #7F00FF 0%, #E100FF 100%);
+  animation: fade7 35s ease-in-out infinite;
+}
+
+/* Staggered fade animations - each gradient fades in and out */
+@keyframes fade1 {
+  0%, 10% { opacity: 1; }
+  14%, 100% { opacity: 0; }
+}
+@keyframes fade2 {
+  0%, 10% { opacity: 0; }
+  14%, 24% { opacity: 1; }
+  28%, 100% { opacity: 0; }
+}
+@keyframes fade3 {
+  0%, 24% { opacity: 0; }
+  28%, 38% { opacity: 1; }
+  42%, 100% { opacity: 0; }
+}
+@keyframes fade4 {
+  0%, 38% { opacity: 0; }
+  42%, 52% { opacity: 1; }
+  56%, 100% { opacity: 0; }
+}
+@keyframes fade5 {
+  0%, 52% { opacity: 0; }
+  56%, 66% { opacity: 1; }
+  70%, 100% { opacity: 0; }
+}
+@keyframes fade6 {
+  0%, 66% { opacity: 0; }
+  70%, 80% { opacity: 1; }
+  84%, 100% { opacity: 0; }
+}
+@keyframes fade7 {
+  0%, 80% { opacity: 0; }
+  84%, 96% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 body {
