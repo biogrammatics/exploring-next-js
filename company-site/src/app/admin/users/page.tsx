@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/db";
 import Link from "next/link";
+import { auth } from "@/lib/auth";
 
 export default async function AdminUsersPage() {
+  const session = await auth();
+  const currentUserRole = session?.user?.role;
+
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
     include: {
@@ -17,9 +21,39 @@ export default async function AdminUsersPage() {
     }).format(date);
   };
 
+  const getRoleBadgeClass = (role: string) => {
+    switch (role) {
+      case "SUPER_ADMIN":
+        return "bg-red-100 text-red-800";
+      case "ADMIN":
+        return "bg-purple-100 text-purple-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case "SUPER_ADMIN":
+        return "Super Admin";
+      case "ADMIN":
+        return "Admin";
+      default:
+        return "User";
+    }
+  };
+
   return (
     <div>
       <h1 className="text-3xl font-bold mb-8">Users</h1>
+
+      {currentUserRole !== "SUPER_ADMIN" && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+          <p className="text-yellow-800 text-sm">
+            You can view users but only Super Admins can change user roles.
+          </p>
+        </div>
+      )}
 
       <div className="bg-white border rounded-lg overflow-hidden">
         <table className="w-full">
@@ -40,13 +74,9 @@ export default async function AdminUsersPage() {
                 <td className="py-3 px-4">{user.name || "—"}</td>
                 <td className="py-3 px-4">
                   <span
-                    className={`px-2 py-1 rounded text-xs ${
-                      user.role === "ADMIN"
-                        ? "bg-purple-100 text-purple-800"
-                        : "bg-gray-100 text-gray-800"
-                    }`}
+                    className={`px-2 py-1 rounded text-xs ${getRoleBadgeClass(user.role)}`}
                   >
-                    {user.role}
+                    {getRoleLabel(user.role)}
                   </span>
                 </td>
                 <td className="py-3 px-4">{user._count.orders}</td>
