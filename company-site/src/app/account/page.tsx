@@ -30,34 +30,68 @@ export default async function AccountPage() {
     redirect("/auth/signin");
   }
 
-  const orderCount = await prisma.order.count({
-    where: { userId: session.user.id },
-  });
+  // Get counts for dashboard summary
+  const [vectorCount, strainCount, projectCount] = await Promise.all([
+    prisma.vectorOrderItem.count({
+      where: {
+        order: {
+          userId: session.user.id,
+          status: { in: ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"] },
+        },
+      },
+    }),
+    prisma.strainOrderItem.count({
+      where: {
+        order: {
+          userId: session.user.id,
+          status: { in: ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"] },
+        },
+      },
+    }),
+    prisma.customProject.count({
+      where: { userId: session.user.id },
+    }),
+  ]);
+
+  const totalItems = vectorCount + strainCount + projectCount;
 
   return (
-    <main className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">My Account</h1>
+    <main className="min-h-screen py-12 px-4">
+      <div className="container mx-auto max-w-6xl">
+        <h1 className="text-4xl font-bold mb-8 text-white drop-shadow-lg">My Account</h1>
 
-      <div className="grid gap-8 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <div className="border rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-6">Profile</h2>
-            <ProfileForm user={user} />
+        <div className="grid gap-8 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <div className="glass-panel p-6">
+              <h2 className="text-xl font-semibold mb-6 text-gray-800">Profile</h2>
+              <ProfileForm user={user} />
+            </div>
           </div>
-        </div>
 
-        <div>
-          <div className="border rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Orders</h2>
-            <p className="text-gray-600 mb-4">
-              You have placed {orderCount} order{orderCount !== 1 ? "s" : ""}.
-            </p>
-            <Link
-              href="/account/orders"
-              className="inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-            >
-              View Order History
-            </Link>
+          <div className="space-y-6">
+            <div className="glass-panel p-6">
+              <h2 className="text-xl font-semibold mb-4 text-gray-800">My Dashboard</h2>
+              <div className="space-y-3 mb-4">
+                <div className="flex justify-between text-gray-600">
+                  <span>Vectors</span>
+                  <span className="font-medium">{vectorCount}</span>
+                </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>Strains</span>
+                  <span className="font-medium">{strainCount}</span>
+                </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>Custom Projects</span>
+                  <span className="font-medium">{projectCount}</span>
+                </div>
+              </div>
+              <Link
+                href="/account/dashboard"
+                className="inline-block w-full text-center bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+              >
+                View Dashboard
+              </Link>
+            </div>
           </div>
         </div>
       </div>
