@@ -15,14 +15,61 @@ export async function POST(request: NextRequest) {
     // Normalize email to lowercase
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Check if user exists
+    // Check if this is a primary account email
     const existingUser = await prisma.user.findUnique({
       where: { email: normalizedEmail },
       select: { id: true },
     });
 
+    if (existingUser) {
+      return NextResponse.json({
+        exists: true,
+        type: "primary",
+      });
+    }
+
+    // Check if this is an authorized team email
+    const authorizedEmail = await prisma.authorizedEmail.findFirst({
+      where: {
+        email: normalizedEmail,
+        status: "ACTIVE",
+      },
+      select: {
+        id: true,
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (authorizedEmail) {
+      return NextResponse.json({
+        exists: true,
+        type: "team",
+        // Don't expose the actual account email for security
+      });
+    }
+
+    // Check if there's a pending invitation
+    const pendingInvite = await prisma.authorizedEmail.findFirst({
+      where: {
+        email: normalizedEmail,
+        status: "PENDING",
+      },
+      select: { id: true },
+    });
+
+    if (pendingInvite) {
+      return NextResponse.json({
+        exists: false,
+        pendingInvite: true,
+      });
+    }
+
     return NextResponse.json({
-      exists: !!existingUser,
+      exists: false,
     });
   } catch (error) {
     console.error("Error checking email:", error);

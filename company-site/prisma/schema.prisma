@@ -58,6 +58,10 @@ model User {
   // Service pathway relations
   pathwaySelections PathwaySelection[]
   serviceQuotes     ServiceQuote[]
+
+  // Team access relations
+  authorizedEmails    AuthorizedEmail[]
+  emailChangeRequests EmailChangeRequest[]
 }
 
 model Account {
@@ -93,6 +97,59 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// ============================================================================
+// TEAM ACCESS MODELS (Multiple emails per account)
+// ============================================================================
+
+enum AuthorizedEmailStatus {
+  PENDING    // Invitation sent, waiting for confirmation
+  ACTIVE     // Confirmed and can log in
+  REVOKED    // Access removed by account owner
+}
+
+model AuthorizedEmail {
+  id     String                @id @default(cuid())
+  email  String
+  status AuthorizedEmailStatus @default(PENDING)
+
+  // The user account this email can access
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Invitation tracking
+  invitedAt   DateTime  @default(now())
+  confirmedAt DateTime?
+  revokedAt   DateTime?
+
+  // Invitation token (for email verification)
+  inviteToken       String?   @unique
+  inviteTokenExpires DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([email, userId]) // Each email can only be authorized once per account
+  @@index([email])
+  @@index([userId])
+  @@index([status])
+}
+
+// Token for changing primary email address
+model EmailChangeRequest {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  newEmail String
+  token    String   @unique
+  expires  DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
 }
 
 // ============================================================================

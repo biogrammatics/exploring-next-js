@@ -70,6 +70,19 @@ export default async function AccountPage() {
 
           <div className="space-y-6">
             <div className="glass-panel p-6">
+              <h2 className="text-xl font-semibold mb-4 text-gray-800">Team Access</h2>
+              <p className="text-gray-600 text-sm mb-4">
+                Allow colleagues to access your account using their own email addresses.
+              </p>
+              <Link
+                href="/account/team"
+                className="inline-block w-full text-center bg-gray-100 text-gray-800 px-4 py-2 rounded hover:bg-gray-200"
+              >
+                Manage Team Access
+              </Link>
+            </div>
+
+            <div className="glass-panel p-6">
               <h2 className="text-xl font-semibold mb-4 text-gray-800">My Dashboard</h2>
               <div className="space-y-3 mb-4">
                 <div className="flex justify-between text-gray-600">
