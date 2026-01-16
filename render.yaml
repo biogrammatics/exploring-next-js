@@ -21,7 +21,7 @@ services:
           name: biogrammatics-nextjs-db
           property: connectionString
       - key: NEXTAUTH_URL
-        sync: false
+        value: https://beta.biogrammatics.com
       - key: NEXTAUTH_SECRET
         generateValue: true
       - key: RESEND_API_KEY
