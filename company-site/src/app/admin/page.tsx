@@ -1,7 +1,11 @@
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 
 export default async function AdminDashboardPage() {
+  const session = await auth();
+  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
+
   const [vectorCount, strainCount, orderCount, userCount, recentOrders] = await Promise.all([
     prisma.vector.count(),
     prisma.pichiaStrain.count(),
@@ -27,6 +31,14 @@ export default async function AdminDashboardPage() {
     _sum: { total: true },
   });
 
+  // Super Admin specific stats
+  const adminCount = isSuperAdmin
+    ? await prisma.user.count({ where: { role: "ADMIN" } })
+    : 0;
+  const superAdminCount = isSuperAdmin
+    ? await prisma.user.count({ where: { role: "SUPER_ADMIN" } })
+    : 0;
+
   const formatPrice = (cents: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -43,7 +55,14 @@ export default async function AdminDashboardPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-8">Dashboard</h1>
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        {isSuperAdmin && (
+          <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium">
+            Super Admin
+          </span>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
         <Link href="/admin/vectors" className="bg-white border rounded-lg p-6 hover:shadow-md transition-shadow">
@@ -122,6 +141,34 @@ export default async function AdminDashboardPage() {
           </table>
         )}
       </div>
+
+      {/* Super Admin Section */}
+      {isSuperAdmin && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 mt-8">
+          <h2 className="text-xl font-semibold mb-4 text-red-800">
+            Super Admin Controls
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white border rounded-lg p-4">
+              <p className="text-sm text-gray-500">Admin Users</p>
+              <p className="text-2xl font-bold">{adminCount}</p>
+            </div>
+            <div className="bg-white border rounded-lg p-4">
+              <p className="text-sm text-gray-500">Super Admins</p>
+              <p className="text-2xl font-bold">{superAdminCount}</p>
+            </div>
+            <Link
+              href="/admin/users"
+              className="bg-red-600 text-white rounded-lg p-4 hover:bg-red-700 transition-colors flex items-center justify-center"
+            >
+              <span className="font-medium">Manage User Roles</span>
+            </Link>
+          </div>
+          <p className="text-sm text-red-700 mt-4">
+            As a Super Admin, you can promote users to Admin or Super Admin roles.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

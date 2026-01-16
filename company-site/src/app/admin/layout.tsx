@@ -10,6 +10,7 @@ export default async function AdminLayout({
   const session = await auth();
 
   const isAdmin = session?.user?.role === "ADMIN" || session?.user?.role === "SUPER_ADMIN";
+  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
 
   if (!session || !isAdmin) {
     redirect("/");
@@ -26,7 +27,12 @@ export default async function AdminLayout({
   return (
     <div className="flex min-h-[calc(100vh-65px)]">
       <aside className="w-64 bg-gray-50 border-r p-4">
-        <h2 className="text-lg font-semibold mb-4">Admin</h2>
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold">Admin</h2>
+          <p className="text-xs text-gray-500">
+            {isSuperAdmin ? "Super Admin" : "Admin"}
+          </p>
+        </div>
         <nav className="space-y-1">
           {navItems.map((item) => (
             <Link
@@ -38,6 +44,17 @@ export default async function AdminLayout({
             </Link>
           ))}
         </nav>
+        {isSuperAdmin && (
+          <div className="mt-6 pt-4 border-t">
+            <p className="text-xs text-gray-500 mb-2">Super Admin</p>
+            <Link
+              href="/admin/users"
+              className="block px-3 py-2 rounded-lg hover:bg-red-50 text-red-700 text-sm"
+            >
+              Manage Roles
+            </Link>
+          </div>
+        )}
       </aside>
       <main className="flex-1 p-8">{children}</main>
     </div>

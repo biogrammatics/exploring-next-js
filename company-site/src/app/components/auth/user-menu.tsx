@@ -26,7 +26,7 @@ export async function UserMenu() {
         Account
       </Link>
 
-      {session.user.role === "ADMIN" && (
+      {(session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN") && (
         <Link
           href="/admin"
           className="text-sm font-medium text-blue-600 hover:text-blue-800"
