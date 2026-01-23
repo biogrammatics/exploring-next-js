@@ -8,7 +8,7 @@
  */
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { PrismaClient } = require("../src/generated/prisma");
+const { PrismaClient } = require("../src/generated/prisma/client");
 import { Resend } from "resend";
 
 // Initialize clients
