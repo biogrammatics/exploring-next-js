@@ -9,10 +9,13 @@
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { PrismaClient } = require("../src/generated/prisma/client");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { PrismaPg } = require("@prisma/adapter-pg");
 import { Resend } from "resend";
 
 // Initialize clients
-const prisma = new PrismaClient();
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+const prisma = new PrismaClient({ adapter });
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Configuration
