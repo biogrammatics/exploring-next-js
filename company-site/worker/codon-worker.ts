@@ -7,8 +7,8 @@
  * Usage: npx tsx worker/codon-worker.ts
  */
 
-// @ts-ignore - Worker runs outside Next.js context
-import { PrismaClient } from "../src/generated/prisma/index.js";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { PrismaClient } = require("../src/generated/prisma");
 import { Resend } from "resend";
 
 // Initialize clients
