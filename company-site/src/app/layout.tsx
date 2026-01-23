@@ -39,6 +39,7 @@ export default function RootLayout({
           <div className="g3" />
           <div className="g4" />
           <div className="g5" />
+          <div className="texture" />
         </div>
         <AuthSessionProvider>
           <CartProvider>
