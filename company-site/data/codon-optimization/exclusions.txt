@@ -1,0 +1,37 @@
+# DNA Sequence Exclusion Patterns
+# =================================
+# One pattern per line. Lines starting with # are comments.
+# Patterns are Python regex (case-insensitive by default).
+
+# Common Restriction Sites
+# -------------------------
+GTTTAAAC              # PmeI
+
+# Homopolymer Runs (6 or more bases)
+# -----------------------------------
+A{6,}               # Poly-A runs
+T{6,}               # Poly-T runs
+G{6,}               # Poly-G runs
+C{6,}               # Poly-C runs
+
+# AT/GC Rich Regions (9 or more bases)
+# -------------------------------------
+[AT]{9,}            # AT-rich regions
+[GC]{9,}            # GC-rich regions
+
+# Splice Sites (avoid cryptic splice sites)
+# ------------------------------------------
+GTA[AT]GT           # Donor site consensus
+TAAC[ACGT]{1,19}[TC]AG              # Acceptor site consensus
+
+# Repeat Sequences
+# ----------------
+(GGTACC){2,}        # Di-nucleotide repeats
+
+# NOTE: Amino acid homopolymer repeats (polyQ, polyH, etc.) are now handled
+# dynamically by the HomopolymerDiversityConstraint class, which analyzes each
+# protein individually and ensures codon diversity within homopolymer runs.
+
+# Uncommon but problematic sequences
+# -----------------------------------
+#CGTACG             # CpG islands (uncomment if avoiding)

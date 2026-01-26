@@ -2,16 +2,27 @@
  * Codon Optimization Background Worker
  *
  * This worker polls the database for pending codon optimization jobs
- * and processes them. It runs as a separate service on Render.
+ * and processes them using beam search with 9-mer scoring.
+ * It runs as a separate service on Render.
  *
  * Usage: npx tsx worker/codon-worker.ts
  */
+
+import * as fs from "fs";
+import * as path from "path";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { PrismaClient } = require("../src/generated/prisma/client");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { PrismaPg } = require("@prisma/adapter-pg");
 import { Resend } from "resend";
+
+// Import the beam search optimizer
+import {
+  NinemerBeamSearchOptimizer,
+  type NinemerScores,
+  type OptimizationResult,
+} from "../src/lib/beam-search-optimizer";
 
 // Initialize clients
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
@@ -20,80 +31,134 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Configuration
 const POLL_INTERVAL_MS = 5000; // 5 seconds
-const MAX_RETRIES = 3;
+const BEAM_WIDTH = 100;
+
+// Global optimizer instance (loaded once at startup)
+let optimizer: NinemerBeamSearchOptimizer | null = null;
 
 // ============================================================================
-// CODON OPTIMIZATION ALGORITHM
-// (Duplicated from src/lib/codon-optimization.ts to avoid Next.js imports)
+// DATA LOADING
 // ============================================================================
 
-const CODON_TABLE: Record<string, string[]> = {
-  'A': ['GCT', 'GCC', 'GCA', 'GCG'],
-  'V': ['GTT', 'GTC', 'GTA', 'GTG'],
-  'L': ['TTA', 'TTG', 'CTT', 'CTC', 'CTA', 'CTG'],
-  'I': ['ATT', 'ATC', 'ATA'],
-  'M': ['ATG'],
-  'F': ['TTT', 'TTC'],
-  'W': ['TGG'],
-  'P': ['CCT', 'CCC', 'CCA', 'CCG'],
-  'S': ['TCT', 'TCC', 'TCA', 'TCG', 'AGT', 'AGC'],
-  'T': ['ACT', 'ACC', 'ACA', 'ACG'],
-  'N': ['AAT', 'AAC'],
-  'Q': ['CAA', 'CAG'],
-  'Y': ['TAT', 'TAC'],
-  'C': ['TGT', 'TGC'],
-  'G': ['GGT', 'GGC', 'GGA', 'GGG'],
-  'K': ['AAA', 'AAG'],
-  'R': ['CGT', 'CGC', 'CGA', 'CGG', 'AGA', 'AGG'],
-  'H': ['CAT', 'CAC'],
-  'D': ['GAT', 'GAC'],
-  'E': ['GAA', 'GAG'],
-  '*': ['TAA', 'TAG', 'TGA'],
-};
+function loadOptimizer(): NinemerBeamSearchOptimizer {
+  const dataDir = path.join(__dirname, "..", "data", "codon-optimization");
 
-function resolveAmbiguousAminoAcid(aa: string): string {
-  switch (aa) {
-    case 'B': return Math.random() < 0.5 ? 'D' : 'N';
-    case 'Z': return Math.random() < 0.5 ? 'E' : 'Q';
-    case 'J': return Math.random() < 0.5 ? 'L' : 'I';
-    case 'U': return 'C';
-    case 'O': return 'K';
-    case 'X': {
-      const standardAAs = 'ACDEFGHIKLMNPQRSTVWY';
-      return standardAAs[Math.floor(Math.random() * standardAAs.length)];
-    }
-    default: return aa;
-  }
+  // Load 9-mer scoring matrix
+  console.log(`[${new Date().toISOString()}] Loading 9-mer scoring matrix...`);
+  const scoresPath = path.join(dataDir, "ninemer_scores.json");
+  const scoresData = JSON.parse(fs.readFileSync(scoresPath, "utf-8"));
+  const ninemerScores: NinemerScores = scoresData.ninemer_scores;
+  console.log(
+    `[${new Date().toISOString()}] Loaded ${Object.keys(ninemerScores).length} amino acid triplets`
+  );
+
+  // Load exclusion patterns
+  const exclusionsPath = path.join(dataDir, "exclusions.txt");
+  const exclusionPatterns = fs.readFileSync(exclusionsPath, "utf-8");
+
+  return new NinemerBeamSearchOptimizer(ninemerScores, {
+    beamWidth: BEAM_WIDTH,
+    exclusionPatterns,
+    enforceUniqueSixmers: true,
+    enforceHomopolymerDiversity: true,
+  });
 }
 
-function selectCodon(aminoAcid: string): string {
-  const resolvedAA = resolveAmbiguousAminoAcid(aminoAcid);
-  const codons = CODON_TABLE[resolvedAA];
-  if (!codons || codons.length === 0) {
-    throw new Error(`No codons found for amino acid: ${aminoAcid}`);
+// ============================================================================
+// PROTEIN SEQUENCE PREPROCESSING
+// ============================================================================
+
+/**
+ * Preprocess protein sequence: handle ambiguous amino acids and validate
+ */
+function preprocessProteinSequence(sequence: string): {
+  success: boolean;
+  processedSequence?: string;
+  error?: string;
+} {
+  // Remove whitespace and convert to uppercase
+  let processed = sequence.replace(/\s/g, "").toUpperCase();
+
+  // Handle ambiguous amino acids
+  const processed_chars: string[] = [];
+  for (const aa of processed) {
+    switch (aa) {
+      case "B": // Aspartate or Asparagine
+        processed_chars.push(Math.random() < 0.5 ? "D" : "N");
+        break;
+      case "Z": // Glutamate or Glutamine
+        processed_chars.push(Math.random() < 0.5 ? "E" : "Q");
+        break;
+      case "J": // Leucine or Isoleucine
+        processed_chars.push(Math.random() < 0.5 ? "L" : "I");
+        break;
+      case "U": // Selenocysteine -> Cysteine
+        processed_chars.push("C");
+        break;
+      case "O": // Pyrrolysine -> Lysine
+        processed_chars.push("K");
+        break;
+      case "X": // Unknown -> random standard AA
+        const standardAAs = "ACDEFGHIKLMNPQRSTVWY";
+        processed_chars.push(
+          standardAAs[Math.floor(Math.random() * standardAAs.length)]
+        );
+        break;
+      default:
+        // Standard amino acids
+        if ("ACDEFGHIKLMNPQRSTVWY".includes(aa)) {
+          processed_chars.push(aa);
+        } else {
+          return {
+            success: false,
+            error: `Invalid amino acid character: ${aa}`,
+          };
+        }
+    }
   }
-  return codons[Math.floor(Math.random() * codons.length)];
+
+  return {
+    success: true,
+    processedSequence: processed_chars.join(""),
+  };
 }
 
-function optimizeCodon(proteinSequence: string): { success: boolean; dnaSequence?: string; error?: string } {
-  try {
-    const codons: string[] = [];
-    for (const aa of proteinSequence) {
-      const codon = selectCodon(aa);
-      codons.push(codon);
-    }
-    return { success: true, dnaSequence: codons.join('') };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+/**
+ * Perform codon optimization using beam search
+ */
+function optimizeCodon(proteinSequence: string): OptimizationResult {
+  if (!optimizer) {
+    return { success: false, error: "Optimizer not initialized" };
   }
+
+  // Preprocess the sequence
+  const preprocessed = preprocessProteinSequence(proteinSequence);
+  if (!preprocessed.success || !preprocessed.processedSequence) {
+    return { success: false, error: preprocessed.error };
+  }
+
+  // Run optimization
+  return optimizer.optimize(preprocessed.processedSequence);
 }
 
 // ============================================================================
 // EMAIL TEMPLATES
 // ============================================================================
 
-function getCompletionEmailHtml(jobId: string, proteinName: string | null, baseUrl: string): string {
+function getCompletionEmailHtml(
+  jobId: string,
+  proteinName: string | null,
+  baseUrl: string,
+  score?: number,
+  elapsedMs?: number
+): string {
   const jobUrl = `${baseUrl}/codon-optimization?job=${jobId}`;
+  const scoreInfo =
+    score !== undefined ? `<p style="color: #6b7280; font-size: 14px;">Optimization score: ${score.toLocaleString()}</p>` : "";
+  const timeInfo =
+    elapsedMs !== undefined
+      ? `<p style="color: #6b7280; font-size: 14px;">Processing time: ${(elapsedMs / 1000).toFixed(1)}s</p>`
+      : "";
 
   return `
 <!DOCTYPE html>
@@ -111,8 +176,11 @@ function getCompletionEmailHtml(jobId: string, proteinName: string | null, baseU
     <h2 style="color: #1f2937; margin-top: 0;">Codon Optimization Complete!</h2>
 
     <p style="color: #4b5563;">
-      Your codon optimization job${proteinName ? ` for <strong>${proteinName}</strong>` : ''} has been completed successfully.
+      Your codon optimization job${proteinName ? ` for <strong>${proteinName}</strong>` : ""} has been completed successfully.
     </p>
+
+    ${scoreInfo}
+    ${timeInfo}
 
     <div style="text-align: center; margin: 30px 0;">
       <a href="${jobUrl}" style="display: inline-block; background: #16a34a; color: white; text-decoration: none; padding: 14px 30px; border-radius: 6px; font-weight: 600; font-size: 16px;">
@@ -143,12 +211,16 @@ function getCompletionEmailHtml(jobId: string, proteinName: string | null, baseU
 `;
 }
 
-function getCompletionEmailText(jobId: string, proteinName: string | null, baseUrl: string): string {
+function getCompletionEmailText(
+  jobId: string,
+  proteinName: string | null,
+  baseUrl: string
+): string {
   const jobUrl = `${baseUrl}/codon-optimization?job=${jobId}`;
 
   return `Codon Optimization Complete - BioGrammatics
 
-Your codon optimization job${proteinName ? ` for ${proteinName}` : ''} has been completed successfully.
+Your codon optimization job${proteinName ? ` for ${proteinName}` : ""} has been completed successfully.
 
 View your results: ${jobUrl}
 
@@ -161,7 +233,12 @@ Protein Expression Experts
 `;
 }
 
-function getFailureEmailHtml(jobId: string, proteinName: string | null, errorMessage: string, baseUrl: string): string {
+function getFailureEmailHtml(
+  jobId: string,
+  proteinName: string | null,
+  errorMessage: string,
+  baseUrl: string
+): string {
   const jobUrl = `${baseUrl}/codon-optimization?job=${jobId}`;
 
   return `
@@ -180,7 +257,7 @@ function getFailureEmailHtml(jobId: string, proteinName: string | null, errorMes
     <h2 style="color: #1f2937; margin-top: 0;">Codon Optimization Failed</h2>
 
     <p style="color: #4b5563;">
-      Unfortunately, your codon optimization job${proteinName ? ` for <strong>${proteinName}</strong>` : ''} encountered an error.
+      Unfortunately, your codon optimization job${proteinName ? ` for <strong>${proteinName}</strong>` : ""} encountered an error.
     </p>
 
     <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 15px; margin: 20px 0;">
@@ -211,12 +288,17 @@ function getFailureEmailHtml(jobId: string, proteinName: string | null, errorMes
 `;
 }
 
-function getFailureEmailText(jobId: string, proteinName: string | null, errorMessage: string, baseUrl: string): string {
+function getFailureEmailText(
+  jobId: string,
+  proteinName: string | null,
+  errorMessage: string,
+  baseUrl: string
+): string {
   const jobUrl = `${baseUrl}/codon-optimization?job=${jobId}`;
 
   return `Codon Optimization Failed - BioGrammatics
 
-Unfortunately, your codon optimization job${proteinName ? ` for ${proteinName}` : ''} encountered an error.
+Unfortunately, your codon optimization job${proteinName ? ` for ${proteinName}` : ""} encountered an error.
 
 Error: ${errorMessage}
 
@@ -262,18 +344,32 @@ async function processJob(jobId: string): Promise<void> {
         },
       });
 
-      console.log(`[${new Date().toISOString()}] Job ${jobId} completed successfully`);
+      console.log(
+        `[${new Date().toISOString()}] Job ${jobId} completed successfully (score: ${result.score}, time: ${result.elapsedMs}ms)`
+      );
 
       // Send notification email if requested
       if (job.notificationEmail) {
-        await sendNotificationEmail(jobId, job.proteinName, job.notificationEmail, true);
+        await sendNotificationEmail(
+          jobId,
+          job.proteinName,
+          job.notificationEmail,
+          true,
+          undefined,
+          result.score,
+          result.elapsedMs
+        );
       }
     } else {
       throw new Error(result.error || "Unknown optimization error");
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error(`[${new Date().toISOString()}] Job ${jobId} failed:`, errorMessage);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    console.error(
+      `[${new Date().toISOString()}] Job ${jobId} failed:`,
+      errorMessage
+    );
 
     // Get job for notification email
     const job = await prisma.codonOptimizationJob.findUnique({
@@ -292,7 +388,13 @@ async function processJob(jobId: string): Promise<void> {
 
     // Send failure notification if email was provided
     if (job?.notificationEmail) {
-      await sendNotificationEmail(jobId, job.proteinName, job.notificationEmail, false, errorMessage);
+      await sendNotificationEmail(
+        jobId,
+        job.proteinName,
+        job.notificationEmail,
+        false,
+        errorMessage
+      );
     }
   }
 }
@@ -302,27 +404,41 @@ async function sendNotificationEmail(
   proteinName: string | null,
   email: string,
   success: boolean,
-  errorMessage?: string
+  errorMessage?: string,
+  score?: number,
+  elapsedMs?: number
 ): Promise<void> {
-  const baseUrl = process.env.NEXTAUTH_URL || "https://beta.biogrammatics.com";
-  const fromAddress = process.env.EMAIL_FROM || "BioGrammatics <noreply@links.biogrammatics.com>";
+  const baseUrl =
+    process.env.NEXTAUTH_URL || "https://beta.biogrammatics.com";
+  const fromAddress =
+    process.env.EMAIL_FROM || "BioGrammatics <noreply@links.biogrammatics.com>";
 
   try {
     if (success) {
       await resend.emails.send({
         from: fromAddress,
         to: email,
-        subject: `Codon Optimization Complete${proteinName ? `: ${proteinName}` : ''}`,
-        html: getCompletionEmailHtml(jobId, proteinName, baseUrl),
+        subject: `Codon Optimization Complete${proteinName ? `: ${proteinName}` : ""}`,
+        html: getCompletionEmailHtml(jobId, proteinName, baseUrl, score, elapsedMs),
         text: getCompletionEmailText(jobId, proteinName, baseUrl),
       });
     } else {
       await resend.emails.send({
         from: fromAddress,
         to: email,
-        subject: `Codon Optimization Failed${proteinName ? `: ${proteinName}` : ''}`,
-        html: getFailureEmailHtml(jobId, proteinName, errorMessage || "Unknown error", baseUrl),
-        text: getFailureEmailText(jobId, proteinName, errorMessage || "Unknown error", baseUrl),
+        subject: `Codon Optimization Failed${proteinName ? `: ${proteinName}` : ""}`,
+        html: getFailureEmailHtml(
+          jobId,
+          proteinName,
+          errorMessage || "Unknown error",
+          baseUrl
+        ),
+        text: getFailureEmailText(
+          jobId,
+          proteinName,
+          errorMessage || "Unknown error",
+          baseUrl
+        ),
       });
     }
 
@@ -332,9 +448,14 @@ async function sendNotificationEmail(
       data: { emailSentAt: new Date() },
     });
 
-    console.log(`[${new Date().toISOString()}] Notification email sent for job ${jobId}`);
+    console.log(
+      `[${new Date().toISOString()}] Notification email sent for job ${jobId}`
+    );
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] Failed to send notification email for job ${jobId}:`, error);
+    console.error(
+      `[${new Date().toISOString()}] Failed to send notification email for job ${jobId}:`,
+      error
+    );
   }
 }
 
@@ -350,13 +471,21 @@ async function pollForJobs(): Promise<void> {
       await processJob(pendingJob.id);
     }
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error polling for jobs:`, error);
+    console.error(
+      `[${new Date().toISOString()}] Error polling for jobs:`,
+      error
+    );
   }
 }
 
 async function main(): Promise<void> {
   console.log(`[${new Date().toISOString()}] Codon optimization worker started`);
   console.log(`[${new Date().toISOString()}] Poll interval: ${POLL_INTERVAL_MS}ms`);
+  console.log(`[${new Date().toISOString()}] Beam width: ${BEAM_WIDTH}`);
+
+  // Load the optimizer on startup
+  optimizer = loadOptimizer();
+  console.log(`[${new Date().toISOString()}] Optimizer initialized`);
 
   // Main loop
   while (true) {
