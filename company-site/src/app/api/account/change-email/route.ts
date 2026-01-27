@@ -82,8 +82,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Send verification email to the new address
-    const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    // Send verification email to the new address - use request origin to ensure correct domain
+    const protocol = request.headers.get("x-forwarded-proto") || "https";
+    const host = request.headers.get("host") || "beta.biogrammatics.com";
+    const baseUrl = process.env.NEXTAUTH_URL || `${protocol}://${host}`;
     const verifyUrl = `${baseUrl}/api/account/verify-email-change?token=${token}`;
 
     const fromAddress = process.env.EMAIL_FROM || "BioGrammatics <noreply@links.biogrammatics.com>";

@@ -39,8 +39,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Build the callback URL
-    const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    // Build the callback URL - use request origin to ensure correct domain
+    const protocol = request.headers.get("x-forwarded-proto") || "https";
+    const host = request.headers.get("host") || "beta.biogrammatics.com";
+    const baseUrl = process.env.NEXTAUTH_URL || `${protocol}://${host}`;
     const callbackUrl = `${baseUrl}/api/auth/verify-magic-link?token=${token}&email=${encodeURIComponent(normalizedEmail)}`;
 
     // Check if this is a team email login
