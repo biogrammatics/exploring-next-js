@@ -40,6 +40,20 @@ export async function getSignedDownloadUrl(
   return getSignedUrl(s3Client, command, { expiresIn });
 }
 
+export async function getSignedViewUrl(
+  key: string,
+  contentType?: string,
+  expiresIn: number = 3600 // 1 hour default
+): Promise<string> {
+  const command = new GetObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+    ResponseContentDisposition: "inline",
+    ...(contentType && { ResponseContentType: contentType }),
+  });
+  return getSignedUrl(s3Client, command, { expiresIn });
+}
+
 export async function deleteFromS3(key: string): Promise<void> {
   await s3Client.send(
     new DeleteObjectCommand({

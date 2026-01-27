@@ -376,6 +376,9 @@ model Vector {
   vectorSize  Int? // Base pairs
   features    String?
 
+  // Thumbnail image (400x400 WebP, base64 encoded for fast catalog loading)
+  thumbnailBase64 String? @db.Text
+
   // Relations to taxonomy
   promoterId        String?
   selectionMarkerId String?

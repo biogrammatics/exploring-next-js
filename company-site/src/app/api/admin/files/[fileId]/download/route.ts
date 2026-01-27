@@ -9,24 +9,47 @@ interface RouteParams {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { fileId } = await params;
 
     // Try to find the file in VectorFile first
     const vectorFile = await prisma.vectorFile.findUnique({
       where: { id: fileId },
+      include: {
+        vector: {
+          include: {
+            productStatus: true,
+          },
+        },
+      },
     });
 
     if (vectorFile) {
+      // Allow public download for available products
+      if (vectorFile.vector.productStatus?.isAvailable) {
+        const signedUrl = await getSignedDownloadUrl(vectorFile.s3Key, vectorFile.fileName, 3600);
+        return NextResponse.redirect(signedUrl);
+      }
+
+      // For unavailable products, require authentication
+      const session = await auth();
+      if (!session?.user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
       const signedUrl = await getSignedDownloadUrl(vectorFile.s3Key, vectorFile.fileName, 3600);
       return NextResponse.redirect(signedUrl);
     }
 
-    // Try VectorLotFile
+    // VectorLotFile - always require admin authentication
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const isAdmin = session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN";
+    if (!isAdmin) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const lotFile = await prisma.vectorLotFile.findUnique({
       where: { id: fileId },
     });

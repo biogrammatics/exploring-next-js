@@ -65,6 +65,38 @@ export default async function VectorDetailPage({ params }: PageProps) {
         </nav>
 
         <div className="glass-panel p-8">
+          {/* Vector Map Image */}
+          {(() => {
+            const primaryImage = vector.files.find(
+              (f) => f.fileType === "IMAGE" && f.isPrimary
+            );
+            const anyImage = vector.files.find((f) => f.fileType === "IMAGE");
+            const imageFile = primaryImage || anyImage;
+
+            if (imageFile || vector.thumbnailBase64) {
+              return (
+                <div className="mb-8 flex justify-center">
+                  <div className="w-full max-w-lg bg-white rounded-lg overflow-hidden shadow-sm border">
+                    {imageFile ? (
+                      <img
+                        src={`/api/admin/files/${imageFile.id}/view`}
+                        alt={`${vector.name} vector map`}
+                        className="w-full h-auto"
+                      />
+                    ) : vector.thumbnailBase64 ? (
+                      <img
+                        src={vector.thumbnailBase64}
+                        alt={`${vector.name} vector map`}
+                        className="w-full h-auto"
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
             <div>
