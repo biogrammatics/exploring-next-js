@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import type { LotFileType } from "@/generated/prisma/client";
+import { DeleteButton, DeleteLinkButton } from "@/app/components/admin/delete-button";
 
 interface PageProps {
   params: Promise<{ id: string; lotId: string }>;
@@ -277,20 +278,11 @@ export default async function EditLotPage({ params }: PageProps) {
                     >
                       Download
                     </a>
-                    <form action={deleteFile}>
-                      <input type="hidden" name="fileId" value={file.id} />
-                      <button
-                        type="submit"
-                        className="text-red-600 hover:underline text-sm"
-                        onClick={(e) => {
-                          if (!confirm("Delete this file?")) {
-                            e.preventDefault();
-                          }
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </form>
+                    <DeleteLinkButton
+                      action={deleteFile}
+                      confirmMessage="Delete this file?"
+                      hiddenInputs={{ fileId: file.id }}
+                    />
                   </div>
                 </div>
               ))}
@@ -306,23 +298,11 @@ export default async function EditLotPage({ params }: PageProps) {
           Deleting this lot will also delete all associated files. This action
           cannot be undone.
         </p>
-        <form action={deleteLot}>
-          <button
-            type="submit"
-            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
-            onClick={(e) => {
-              if (
-                !confirm(
-                  `Are you sure you want to delete lot ${lot.lotNumber}? This will also delete all associated files.`
-                )
-              ) {
-                e.preventDefault();
-              }
-            }}
-          >
-            Delete Lot
-          </button>
-        </form>
+        <DeleteButton
+          action={deleteLot}
+          confirmMessage={`Are you sure you want to delete lot ${lot.lotNumber}? This will also delete all associated files.`}
+          buttonText="Delete Lot"
+        />
       </div>
     </div>
   );

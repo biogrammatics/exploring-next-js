@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import type { VectorFileType } from "@/generated/prisma/client";
+import { DeleteButton, DeleteLinkButton } from "@/app/components/admin/delete-button";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -455,20 +456,11 @@ export default async function EditVectorPage({ params }: PageProps) {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 ml-4">
-                  <form action={deleteFile}>
-                    <input type="hidden" name="fileId" value={file.id} />
-                    <button
-                      type="submit"
-                      className="text-red-600 hover:underline text-sm"
-                      onClick={(e) => {
-                        if (!confirm("Delete this file?")) {
-                          e.preventDefault();
-                        }
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </form>
+                  <DeleteLinkButton
+                    action={deleteFile}
+                    confirmMessage="Delete this file?"
+                    hiddenInputs={{ fileId: file.id }}
+                  />
                 </div>
               </div>
             ))}
@@ -485,23 +477,11 @@ export default async function EditVectorPage({ params }: PageProps) {
               Deleting this vector will also delete all associated files and lots.
               This action cannot be undone.
             </p>
-            <form action={deleteVector}>
-              <button
-                type="submit"
-                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
-                onClick={(e) => {
-                  if (
-                    !confirm(
-                      `Are you sure you want to delete "${vector.name}"? This will also delete all associated files and lots.`
-                    )
-                  ) {
-                    e.preventDefault();
-                  }
-                }}
-              >
-                Delete Vector
-              </button>
-            </form>
+            <DeleteButton
+              action={deleteVector}
+              confirmMessage={`Are you sure you want to delete "${vector.name}"? This will also delete all associated files and lots.`}
+              buttonText="Delete Vector"
+            />
           </>
         ) : (
           <>
