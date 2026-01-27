@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { uploadToS3, BUCKET_NAME } from "@/lib/s3";
 import type { VectorFileType } from "@/generated/prisma/client";
 
 interface RouteParams {
@@ -72,26 +73,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
     const s3Key = `vectors/${vectorId}/files/${timestamp}-${sanitizedFileName}`;
 
-    // TODO: Upload to S3
-    // For now, we'll just store the metadata. Actual S3 upload should be:
-    //
-    // const s3Client = new S3Client({
-    //   region: process.env.AWS_REGION,
-    //   credentials: {
-    //     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    //     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    //   },
-    // });
-    //
-    // const arrayBuffer = await file.arrayBuffer();
-    // await s3Client.send(
-    //   new PutObjectCommand({
-    //     Bucket: process.env.AWS_S3_BUCKET,
-    //     Key: s3Key,
-    //     Body: Buffer.from(arrayBuffer),
-    //     ContentType: file.type,
-    //   })
-    // );
+    // Upload to S3
+    const arrayBuffer = await file.arrayBuffer();
+    await uploadToS3(
+      s3Key,
+      Buffer.from(arrayBuffer),
+      file.type || "application/octet-stream"
+    );
 
     // Create file record in database
     const vectorFile = await prisma.vectorFile.create({
@@ -101,7 +89,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         fileName: file.name,
         fileSize: file.size,
         s3Key,
-        s3Bucket: process.env.AWS_S3_BUCKET || "biogrammatics-files",
+        s3Bucket: BUCKET_NAME,
         contentType: file.type || "application/octet-stream",
         isPrimary,
       },
