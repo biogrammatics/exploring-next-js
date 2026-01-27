@@ -1,9 +1,36 @@
 import { prisma } from "@/lib/db";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import type { VectorFileType } from "@/generated/prisma/client";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+function formatFileSize(bytes: number | null) {
+  if (!bytes) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getFileTypeLabel(type: VectorFileType) {
+  switch (type) {
+    case "SNAPGENE":
+      return "SnapGene";
+    case "GENBANK":
+      return "GenBank";
+    case "FASTA":
+      return "FASTA";
+    case "PRODUCT_SHEET":
+      return "Product Sheet";
+    case "IMAGE":
+      return "Image";
+    case "OTHER":
+      return "Other";
+    default:
+      return type;
+  }
 }
 
 export default async function EditVectorPage({ params }: PageProps) {
@@ -19,6 +46,16 @@ export default async function EditVectorPage({ params }: PageProps) {
           vectorType: true,
           hostOrganism: true,
           productStatus: true,
+          files: {
+            orderBy: { createdAt: "desc" },
+          },
+          _count: {
+            select: {
+              vectorOrderItems: true,
+              subscriptionVectors: true,
+              customProjects: true,
+            },
+          },
         },
       }),
       prisma.promoter.findMany({ orderBy: { name: "asc" } }),
@@ -31,6 +68,11 @@ export default async function EditVectorPage({ params }: PageProps) {
   if (!vector) {
     notFound();
   }
+
+  const hasOrders = vector._count.vectorOrderItems > 0;
+  const hasSubscriptions = vector._count.subscriptionVectors > 0;
+  const hasProjects = vector._count.customProjects > 0;
+  const canDelete = !hasOrders && !hasSubscriptions && !hasProjects;
 
   async function updateVector(formData: FormData) {
     "use server";
@@ -59,6 +101,55 @@ export default async function EditVectorPage({ params }: PageProps) {
     });
 
     redirect("/admin/vectors");
+  }
+
+  async function deleteVector() {
+    "use server";
+
+    // Double-check that vector can be deleted
+    const vectorWithCounts = await prisma.vector.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            vectorOrderItems: true,
+            subscriptionVectors: true,
+            customProjects: true,
+          },
+        },
+      },
+    });
+
+    if (!vectorWithCounts) {
+      redirect("/admin/vectors");
+    }
+
+    const hasOrders = vectorWithCounts._count.vectorOrderItems > 0;
+    const hasSubscriptions = vectorWithCounts._count.subscriptionVectors > 0;
+    const hasProjects = vectorWithCounts._count.customProjects > 0;
+
+    if (hasOrders || hasSubscriptions || hasProjects) {
+      // Cannot delete - has related records
+      throw new Error("Cannot delete vector with existing orders, subscriptions, or projects");
+    }
+
+    // Delete the vector (files and lots will cascade delete)
+    await prisma.vector.delete({
+      where: { id },
+    });
+
+    redirect("/admin/vectors");
+  }
+
+  async function deleteFile(formData: FormData) {
+    "use server";
+
+    const fileId = formData.get("fileId") as string;
+    await prisma.vectorFile.delete({
+      where: { id: fileId },
+    });
+
+    redirect(`/admin/vectors/${id}/edit`);
   }
 
   return (
@@ -322,6 +413,118 @@ export default async function EditVectorPage({ params }: PageProps) {
           </div>
         </div>
       </form>
+
+      {/* Files Section */}
+      <div className="bg-white border rounded-lg p-6 max-w-2xl mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Vector Files</h2>
+          <Link
+            href={`/admin/vectors/${id}/files/new`}
+            className="bg-blue-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-blue-700"
+          >
+            Upload File
+          </Link>
+        </div>
+
+        {vector.files.length === 0 ? (
+          <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded-lg">
+            <p>No files uploaded yet.</p>
+            <p className="text-sm mt-1">
+              Upload SnapGene maps, GenBank files, or product documentation.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {vector.files.map((file) => (
+              <div
+                key={file.id}
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">
+                    {file.fileName}
+                    {file.isPrimary && (
+                      <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">
+                        Primary
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {getFileTypeLabel(file.fileType)} •{" "}
+                    {formatFileSize(file.fileSize)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 ml-4">
+                  <form action={deleteFile}>
+                    <input type="hidden" name="fileId" value={file.id} />
+                    <button
+                      type="submit"
+                      className="text-red-600 hover:underline text-sm"
+                      onClick={(e) => {
+                        if (!confirm("Delete this file?")) {
+                          e.preventDefault();
+                        }
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Delete Section */}
+      <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-2xl mt-6">
+        <h2 className="text-lg font-semibold text-red-800 mb-2">Danger Zone</h2>
+        {canDelete ? (
+          <>
+            <p className="text-sm text-red-700 mb-4">
+              Deleting this vector will also delete all associated files and lots.
+              This action cannot be undone.
+            </p>
+            <form action={deleteVector}>
+              <button
+                type="submit"
+                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+                onClick={(e) => {
+                  if (
+                    !confirm(
+                      `Are you sure you want to delete "${vector.name}"? This will also delete all associated files and lots.`
+                    )
+                  ) {
+                    e.preventDefault();
+                  }
+                }}
+              >
+                Delete Vector
+              </button>
+            </form>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-red-700 mb-2">
+              This vector cannot be deleted because it has associated records:
+            </p>
+            <ul className="text-sm text-red-700 list-disc list-inside mb-4">
+              {hasOrders && (
+                <li>{vector._count.vectorOrderItems} order(s)</li>
+              )}
+              {hasSubscriptions && (
+                <li>{vector._count.subscriptionVectors} subscription(s)</li>
+              )}
+              {hasProjects && (
+                <li>{vector._count.customProjects} project(s)</li>
+              )}
+            </ul>
+            <p className="text-sm text-gray-600">
+              To delete this vector, first remove or reassign these related records.
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 }
