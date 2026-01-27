@@ -36,6 +36,7 @@ export default function UploadLotFilePage({ params }: PageProps) {
         {
           method: "POST",
           body: formData,
+          credentials: "include",
         }
       );
 

@@ -31,6 +31,7 @@ export default function UploadVectorFilePage({ params }: PageProps) {
       const response = await fetch(`/api/admin/vectors/${vectorId}/files`, {
         method: "POST",
         body: formData,
+        credentials: "include",
       });
 
       if (!response.ok) {
