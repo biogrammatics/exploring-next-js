@@ -22,7 +22,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
 
     if (vectorFile) {
-      const signedUrl = await getSignedDownloadUrl(vectorFile.s3Key, 3600);
+      const signedUrl = await getSignedDownloadUrl(vectorFile.s3Key, vectorFile.fileName, 3600);
       return NextResponse.redirect(signedUrl);
     }
 
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
 
     if (lotFile) {
-      const signedUrl = await getSignedDownloadUrl(lotFile.s3Key, 3600);
+      const signedUrl = await getSignedDownloadUrl(lotFile.s3Key, lotFile.fileName, 3600);
       return NextResponse.redirect(signedUrl);
     }
 

@@ -29,11 +29,13 @@ export async function uploadToS3(
 
 export async function getSignedDownloadUrl(
   key: string,
+  fileName: string,
   expiresIn: number = 3600 // 1 hour default
 ): Promise<string> {
   const command = new GetObjectCommand({
     Bucket: BUCKET_NAME,
     Key: key,
+    ResponseContentDisposition: `attachment; filename="${fileName}"`,
   });
   return getSignedUrl(s3Client, command, { expiresIn });
 }
