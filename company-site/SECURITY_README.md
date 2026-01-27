@@ -209,6 +209,190 @@ Password: [________________]
 [Unlock]  [Cancel]
 ```
 
+## Async Encryption for Custom Services (Advanced)
+
+For services like custom vector construction where there may be days between user submission and result delivery, we use asymmetric encryption (public/private key pairs).
+
+### The Problem
+
+Basic encrypted storage requires the user's browser to be online to encrypt results immediately after processing. For async workflows (submit Monday, results ready Wednesday, user views Friday), we need a different approach.
+
+### The Solution: Dual Key Pairs
+
+- **BioGrammatics key pair**: We publish our public key; we keep our private key secure
+- **User key pair**: User's public key stored on server; private key encrypted with their password
+
+This allows:
+- **User encrypts for us**: Data we need to process (only we can decrypt)
+- **We encrypt for user**: Results (only they can decrypt)
+
+### Workflow
+
+```
+USER SUBMITS JOB (Monday)
+─────────────────────────
+1. Browser generates random AES session key
+2. Browser encrypts protein sequence with AES key
+3. Browser encrypts AES key with BioGrammatics PUBLIC key
+4. Sends encrypted package to server
+5. Job sits encrypted - even we can't read it yet
+
+WE PROCESS (Wednesday)
+──────────────────────
+1. Worker decrypts AES key with our PRIVATE key
+2. Worker decrypts protein sequence
+3. Worker performs optimization (plaintext in memory)
+4. Worker generates new AES key for results
+5. Worker encrypts results with new AES key
+6. Worker encrypts AES key with USER's PUBLIC key
+7. Stores encrypted results, deletes input
+8. Results sit encrypted - now WE can't read them
+
+USER VIEWS RESULTS (Friday)
+───────────────────────────
+1. User downloads encrypted results
+2. User enters password to unlock their private key
+3. Browser decrypts AES key with user's PRIVATE key
+4. Browser decrypts and displays results
+```
+
+### Timeline Security
+
+| Day | Data State | Who Can Read |
+|-----|-----------|--------------|
+| Mon-Tue | Input encrypted with our public key | Only us (with private key) |
+| Wed | Plaintext in memory during processing | Server only, briefly |
+| Wed-Fri | Results encrypted with user's public key | Only user (with private key) |
+| Forever | Encrypted in database | Only user |
+
+### Schema for Async Encryption
+
+```prisma
+model User {
+  // Existing fields...
+
+  // User's key pair for receiving encrypted results
+  publicKey              String?   @db.Text  // RSA public key (PEM format)
+  encryptedPrivateKey    String?   @db.Text  // RSA private key, encrypted with password
+  privateKeySalt         String?             // Salt for password encryption
+  privateKeyIV           String?             // IV for private key encryption
+}
+
+model VectorConstructionJob {
+  id                String   @id @default(cuid())
+  userId            String
+  status            JobStatus
+
+  // Input: encrypted FOR US (only we can decrypt)
+  encryptedInput        String?  @db.Text
+  inputKeyForUs         String?  @db.Text  // AES key encrypted with OUR public key
+  inputIV               String?
+
+  // Output: encrypted FOR USER (only they can decrypt)
+  encryptedOutput       String?  @db.Text
+  outputKeyForUser      String?  @db.Text  // AES key encrypted with USER's public key
+  outputIV              String?
+
+  // Non-sensitive metadata
+  vectorBackbone        String?
+  createdAt             DateTime @default(now())
+  processedAt           DateTime?
+}
+
+enum JobStatus {
+  PENDING_DECRYPTION   // Waiting for us to process
+  PROCESSING           // We're working on it
+  COMPLETED            // Done, encrypted for user
+  FAILED
+}
+```
+
+### Why Hybrid Encryption (RSA + AES)?
+
+RSA can only encrypt small amounts of data (~256 bytes). So we:
+1. Generate random AES key (symmetric, fast, handles any size)
+2. Encrypt the actual data with AES
+3. Encrypt only the small AES key with RSA
+
+This is how TLS, PGP, S/MIME, and most real-world encryption systems work.
+
+### Key Compromise Scenarios
+
+| Scenario | Impact |
+|----------|--------|
+| Our private key leaked | Attacker can decrypt pending inputs (not yet processed). Cannot decrypt completed results. |
+| User's private key leaked | Attacker can decrypt that specific user's results. Other users unaffected. |
+| Database leaked | Encrypted blobs useless without corresponding private keys |
+| Both keys leaked | Full compromise for that user's data |
+
+### Security Properties
+
+**At rest (database):**
+- Input: Encrypted for us (only we can decrypt with our private key)
+- Output: Encrypted for user (only they can decrypt with their private key)
+- No plaintext ever stored persistently
+
+**In transit:**
+- HTTPS encryption
+- Additional application-layer encryption
+
+**In memory:**
+- Plaintext only during active processing
+- Cleared immediately after
+
+---
+
+## Explaining Encryption to Users
+
+When presenting encryption options to users, clarity is essential. Users should understand both the benefits and responsibilities that come with encrypted storage.
+
+### Messaging Guidelines
+
+**For Standard Storage:**
+
+> Your data is protected by industry-standard security measures including encrypted connections and access controls. Our team may access your data to provide support or troubleshoot issues. This is the default option and works seamlessly with all features.
+
+**For Encrypted Storage:**
+
+> With encrypted storage, your sequences are protected by a password that only you know. Your data is encrypted before it's stored, and only you can decrypt it. Even our administrators cannot view your sequences.
+>
+> **Important:** If you forget your encryption password, your data cannot be recovered. We do not have a copy of your password and cannot reset it. Please store your password securely.
+
+**For Async/Advanced Encryption (Custom Services):**
+
+> When you submit a custom project, your sequences are encrypted so that only our processing systems can read them. Once complete, the results are encrypted so that only you can access them. Your data remains encrypted at all times except during the brief moment of active processing.
+
+### Key Points to Communicate
+
+1. **It's optional**: Encryption is a choice, not a requirement. Most users are fine with standard storage.
+
+2. **Password = Key**: The encryption password is the key to their data. No password recovery exists by design.
+
+3. **We can't help if locked out**: Support cannot recover encrypted data. This is a feature, not a limitation.
+
+4. **Processing requires temporary access**: We must be able to read sequences to optimize them. Encryption protects storage, not processing.
+
+5. **Different from login**: The encryption password is separate from their account login (which uses magic links).
+
+### FAQ for Users
+
+**Q: Why would I need encrypted storage?**
+A: If you're working with proprietary sequences or have compliance requirements (pharmaceutical research, trade secrets), encrypted storage ensures only you can access your data.
+
+**Q: Can BioGrammatics see my sequences?**
+A: With standard storage, yes - for support purposes. With encrypted storage, no - we only see encrypted data we cannot read.
+
+**Q: What if I forget my password?**
+A: Your data cannot be recovered. This is intentional - it's what makes the encryption meaningful. We recommend using a password manager.
+
+**Q: Is my data encrypted during optimization?**
+A: During the brief processing time, your sequence must be decrypted in server memory. It is never stored unencrypted and is cleared from memory immediately after processing.
+
+**Q: Can I switch between standard and encrypted?**
+A: Yes. Switching to encrypted will encrypt all future jobs. Existing jobs can be migrated. Switching back to standard requires your password to decrypt.
+
+---
+
 ## Future Considerations
 
 1. **Password strength requirements**: Enforce minimum complexity for encryption passwords
@@ -222,6 +406,10 @@ Password: [________________]
 5. **Team encryption**: Shared encryption for team accounts (more complex key management)
 
 6. **Export**: Allow encrypted export of all user data
+
+7. **Key escrow (optional)**: For enterprise customers, optional key escrow with their IT department
+
+8. **HSM integration**: Hardware Security Modules for our private key storage
 
 ## Compliance Notes
 
