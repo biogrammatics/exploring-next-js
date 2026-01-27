@@ -9,10 +9,13 @@ export async function GET(request: NextRequest) {
     const token = searchParams.get("token");
     const email = searchParams.get("email");
 
+    // Build base URL from request headers to ensure correct domain
+    const protocol = request.headers.get("x-forwarded-proto") || "https";
+    const host = request.headers.get("host") || "beta.biogrammatics.com";
+    const baseUrl = `${protocol}://${host}`;
+
     if (!token || !email) {
-      return NextResponse.redirect(
-        new URL("/auth/error?error=InvalidToken", request.url)
-      );
+      return NextResponse.redirect(new URL("/auth/error?error=InvalidToken", baseUrl));
     }
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -26,9 +29,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!verificationToken) {
-      return NextResponse.redirect(
-        new URL("/auth/error?error=InvalidToken", request.url)
-      );
+      return NextResponse.redirect(new URL("/auth/error?error=InvalidToken", baseUrl));
     }
 
     // Check if token is expired
@@ -42,9 +43,7 @@ export async function GET(request: NextRequest) {
           },
         },
       });
-      return NextResponse.redirect(
-        new URL("/auth/error?error=TokenExpired", request.url)
-      );
+      return NextResponse.redirect(new URL("/auth/error?error=TokenExpired", baseUrl));
     }
 
     // Delete the used token
@@ -136,11 +135,13 @@ export async function GET(request: NextRequest) {
       ? "/account?team_login=true"
       : "/account";
 
-    return NextResponse.redirect(new URL(redirectUrl, request.url));
+    return NextResponse.redirect(new URL(redirectUrl, baseUrl));
   } catch (error) {
     console.error("Error verifying magic link:", error);
-    return NextResponse.redirect(
-      new URL("/auth/error?error=Verification", request.url)
-    );
+    // Build base URL for error case (may not have baseUrl in scope)
+    const protocol = request.headers.get("x-forwarded-proto") || "https";
+    const host = request.headers.get("host") || "beta.biogrammatics.com";
+    const errorBaseUrl = `${protocol}://${host}`;
+    return NextResponse.redirect(new URL("/auth/error?error=Verification", errorBaseUrl));
   }
 }
