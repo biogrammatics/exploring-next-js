@@ -25,6 +25,12 @@ export default async function VectorDetailPage({ params }: PageProps) {
           hostOrganism: true,
           vectorType: true,
           productStatus: true,
+          files: true,
+        },
+      },
+      shippedLot: {
+        include: {
+          files: true,
         },
       },
       order: {
@@ -202,36 +208,88 @@ export default async function VectorDetailPage({ params }: PageProps) {
           )}
 
           {/* Downloads */}
-          {vector.snapgeneFileUrl && (
+          {(vector.files.length > 0 || vectorOrderItem.shippedLot?.files.length) && (
             <section className="mb-8">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">
                 Downloads
               </h2>
-              <a
-                href={vector.snapgeneFileUrl}
-                download={vector.snapgeneFileName || "vector.dna"}
-                className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
-                Download SnapGene File
-                {vector.snapgeneFileSize && (
-                  <span className="text-blue-200 text-sm">
-                    ({(vector.snapgeneFileSize / 1024).toFixed(1)} KB)
-                  </span>
+              <div className="space-y-4">
+                {/* Vector Files (SnapGene, GenBank, etc.) */}
+                {vector.files.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-600 mb-2">
+                      Vector Files
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {vector.files.map((file) => (
+                        <a
+                          key={file.id}
+                          href={`/api/files/${file.id}/download`}
+                          className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                        >
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                            />
+                          </svg>
+                          {file.fileName}
+                          {file.fileSize && (
+                            <span className="text-blue-200 text-sm">
+                              ({(file.fileSize / 1024).toFixed(1)} KB)
+                            </span>
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
                 )}
-              </a>
+
+                {/* Lot-Specific QC Files */}
+                {vectorOrderItem.shippedLot?.files.length ? (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-600 mb-2">
+                      Lot {vectorOrderItem.shippedLot.lotNumber} - QC Documentation
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {vectorOrderItem.shippedLot.files.map((file) => (
+                        <a
+                          key={file.id}
+                          href={`/api/files/${file.id}/download`}
+                          className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                        >
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                            />
+                          </svg>
+                          {file.fileName}
+                          {file.fileSize && (
+                            <span className="text-green-200 text-sm">
+                              ({(file.fileSize / 1024).toFixed(1)} KB)
+                            </span>
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </section>
           )}
 

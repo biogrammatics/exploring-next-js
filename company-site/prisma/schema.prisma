@@ -339,6 +339,24 @@ enum VectorCategory {
   GENOME_ENGINEERING
 }
 
+// File types for canonical vector files
+enum VectorFileType {
+  SNAPGENE       // .dna files
+  GENBANK        // .gb/.gbk files
+  FASTA          // .fasta sequence files
+  PRODUCT_SHEET  // PDF documentation
+  IMAGE          // Vector map images
+  OTHER
+}
+
+// File types for lot-specific QC files
+enum LotFileType {
+  SEQUENCING_DATA  // Chromatograms, .ab1 files
+  QC_REPORT        // Quality control report
+  COA              // Certificate of Analysis
+  OTHER
+}
+
 model Vector {
   id          String          @id @default(cuid())
   name        String          @unique
@@ -358,11 +376,6 @@ model Vector {
   vectorSize  Int? // Base pairs
   features    String?
 
-  // File storage (URL-based for Next.js)
-  snapgeneFileUrl  String?
-  snapgeneFileName String?
-  snapgeneFileSize Int?
-
   // Relations to taxonomy
   promoterId        String?
   selectionMarkerId String?
@@ -379,6 +392,14 @@ model Vector {
   hostOrganism    HostOrganism?    @relation(fields: [hostOrganismId], references: [id])
   productStatus   ProductStatus    @relation(fields: [productStatusId], references: [id])
 
+  // Current shipping lot (updated when lot changes)
+  currentShippingLotId String?
+
+  // File and lot relations
+  files             VectorFile[]
+  lots              VectorLot[]
+  currentShippingLot VectorLot?   @relation("CurrentShippingLot", fields: [currentShippingLotId], references: [id])
+
   // Reverse relations
   subscriptionVectors SubscriptionVector[]
   customProjects      CustomProject[]
@@ -390,6 +411,72 @@ model Vector {
   @@index([productStatusId])
   @@index([promoterId])
   @@index([hostOrganismId])
+}
+
+// Canonical files for a vector (SnapGene maps, GenBank, product sheets)
+model VectorFile {
+  id       String         @id @default(cuid())
+  vectorId String
+  vector   Vector         @relation(fields: [vectorId], references: [id], onDelete: Cascade)
+
+  fileType    VectorFileType
+  fileName    String
+  fileSize    Int?    // bytes
+  s3Key       String  // AWS S3 object key
+  s3Bucket    String? // optional if using single bucket
+  contentType String? // MIME type
+
+  isPrimary Boolean @default(false) // Primary file of this type
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vectorId])
+  @@index([vectorId, fileType])
+}
+
+// Lot tracking for vectors (for traceability and QC)
+model VectorLot {
+  id       String @id @default(cuid())
+  vectorId String
+  vector   Vector @relation(fields: [vectorId], references: [id], onDelete: Cascade)
+
+  lotNumber      String    // e.g., "LOT-2024-001"
+  manufacturedAt DateTime?
+  expiresAt      DateTime?
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  files VectorLotFile[]
+
+  // Reverse relations
+  currentForVectors Vector[]          @relation("CurrentShippingLot")
+  shippedOrderItems VectorOrderItem[]
+
+  @@unique([vectorId, lotNumber])
+  @@index([vectorId])
+  @@index([lotNumber])
+}
+
+// QC and sequencing files for specific lots
+model VectorLotFile {
+  id    String    @id @default(cuid())
+  lotId String
+  lot   VectorLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+
+  fileType    LotFileType
+  fileName    String
+  fileSize    Int?    // bytes
+  s3Key       String  // AWS S3 object key
+  s3Bucket    String? // optional if using single bucket
+  contentType String? // MIME type
+
+  createdAt DateTime @default(now())
+
+  @@index([lotId])
+  @@index([lotId, fileType])
 }
 
 model PichiaStrain {
@@ -531,8 +618,13 @@ model VectorOrderItem {
   vectorId String
   vector   Vector @relation(fields: [vectorId], references: [id])
 
+  // Lot shipped for this order (for traceability)
+  shippedLotId String?
+  shippedLot   VectorLot? @relation(fields: [shippedLotId], references: [id])
+
   @@index([orderId])
   @@index([vectorId])
+  @@index([shippedLotId])
 }
 
 // Strain-specific order item
