@@ -342,6 +342,125 @@ This is how TLS, PGP, S/MIME, and most real-world encryption systems work.
 
 ---
 
+## Dual-Access Encrypted Storage (Recommended)
+
+For most use cases, we recommend a balanced approach: data is encrypted at rest, but both the user AND BioGrammatics can decrypt it. This provides security against database breaches while enabling support and data recovery.
+
+### How It Works
+
+Data is encrypted once with a random AES session key. The session key is then encrypted twice - once with the user's public key, once with BioGrammatics' public key. Both encrypted key copies are stored alongside the encrypted data.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    STORED DATA                          │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  encryptedData: [AES-encrypted sequences]               │
+│  dataIV: [initialization vector]                        │
+│                                                         │
+│  keyForUser: [AES key encrypted with USER's public key] │
+│  keyForBG: [AES key encrypted with BG's public key]     │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Schema
+
+```prisma
+model EncryptedJob {
+  id                String   @id @default(cuid())
+  userId            String
+  status            JobStatus
+
+  // Data encrypted with AES session key (single copy)
+  encryptedData     String?  @db.Text  // Contains protein, DNA, vector, etc.
+  dataIV            String?            // Initialization vector
+
+  // AES session key - two copies with different encryption
+  keyForUser        String?  @db.Text  // AES key encrypted with user's public key
+  keyForBG          String?  @db.Text  // AES key encrypted with BioGrammatics' public key
+
+  // Non-sensitive metadata (plaintext)
+  jobType           String?            // "codon-optimization", "vector-construction"
+  vectorBackbone    String?
+  createdAt         DateTime @default(now())
+  processedAt       DateTime?
+}
+```
+
+### Access Scenarios
+
+| Who | How They Access | Use Case |
+|-----|-----------------|----------|
+| User | Decrypts `keyForUser` with their private key | Normal viewing of their data |
+| BioGrammatics | Decrypts `keyForBG` with our private key | Support, troubleshooting, legal |
+| Attacker with DB dump | Cannot decrypt - no private keys | Breach protection |
+
+### Workflow
+
+```
+USER SUBMITS JOB
+────────────────
+1. Browser generates random AES session key
+2. Browser encrypts protein sequence with AES key
+3. Browser encrypts AES key with BioGrammatics PUBLIC key
+4. Sends to server
+
+WE PROCESS
+──────────
+1. Worker decrypts AES key with our PRIVATE key
+2. Worker decrypts and processes data
+3. Worker generates NEW AES session key for results
+4. Worker encrypts results with new AES key
+5. Worker encrypts AES key TWICE:
+   - Once with User's PUBLIC key → keyForUser
+   - Once with BioGrammatics' PUBLIC key → keyForBG
+6. Stores encrypted results with both key copies
+
+USER OR BG VIEWS
+────────────────
+User: Decrypts keyForUser with their private key → decrypts data
+BG:   Decrypts keyForBG with our private key → decrypts data
+```
+
+### Security Properties
+
+**Protects against:**
+- Database breaches (encrypted blobs useless without private keys)
+- Stolen backups
+- Unauthorized internal access (requires BG private key)
+
+**Allows:**
+- User self-service access to their data
+- BioGrammatics support access when needed
+- Data recovery if user forgets password
+- Compliance with legal requests
+
+### Comparison of Approaches
+
+| Feature | Standard | User-Only Encrypted | Dual-Access Encrypted |
+|---------|----------|---------------------|----------------------|
+| Breach protection | No | Yes | Yes |
+| User can access | Yes | Yes | Yes |
+| BG can access | Yes | No | Yes |
+| Password recovery | N/A | No | Yes (BG can help) |
+| Support possible | Yes | Limited | Yes |
+| Legal compliance | Easy | Impossible | Possible |
+
+### User Messaging for Dual-Access
+
+> Your data is encrypted and protected from unauthorized access, including database breaches. You access your data with your encryption password. BioGrammatics maintains a secure backup key for support purposes and data recovery - this ensures you won't lose access to your work if you forget your password.
+
+### When to Use Each Approach
+
+**Standard Storage:** Quick jobs, non-sensitive data, users who don't want to manage passwords
+
+**Dual-Access Encrypted:** Most users with sensitive data - balances security with practicality
+
+**User-Only Encrypted:** High-security requirements where even BioGrammatics must not have access (rare - pharmaceutical trade secrets, specific compliance requirements)
+
+---
+
 ## Explaining Encryption to Users
 
 When presenting encryption options to users, clarity is essential. Users should understand both the benefits and responsibilities that come with encrypted storage.
@@ -352,9 +471,13 @@ When presenting encryption options to users, clarity is essential. Users should 
 
 > Your data is protected by industry-standard security measures including encrypted connections and access controls. Our team may access your data to provide support or troubleshoot issues. This is the default option and works seamlessly with all features.
 
-**For Encrypted Storage:**
+**For Encrypted Storage (Dual-Access - Recommended):**
 
-> With encrypted storage, your sequences are protected by a password that only you know. Your data is encrypted before it's stored, and only you can decrypt it. Even our administrators cannot view your sequences.
+> With encrypted storage, your sequences are encrypted before being stored in our database. This protects your data from unauthorized access, including database breaches. You access your data with your encryption password. BioGrammatics maintains a secure backup key for support purposes and data recovery.
+
+**For Private Encrypted Storage (User-Only Access):**
+
+> With private encrypted storage, your sequences are protected by a password that only you know. Your data is encrypted before it's stored, and only you can decrypt it. Even our administrators cannot view your sequences.
 >
 > **Important:** If you forget your encryption password, your data cannot be recovered. We do not have a copy of your password and cannot reset it. Please store your password securely.
 
@@ -380,10 +503,10 @@ When presenting encryption options to users, clarity is essential. Users should 
 A: If you're working with proprietary sequences or have compliance requirements (pharmaceutical research, trade secrets), encrypted storage ensures only you can access your data.
 
 **Q: Can BioGrammatics see my sequences?**
-A: With standard storage, yes - for support purposes. With encrypted storage, no - we only see encrypted data we cannot read.
+A: With standard storage, yes. With dual-access encrypted storage, only with our secure backup key (used for support/recovery). With private encrypted storage, no - we cannot read your data at all.
 
 **Q: What if I forget my password?**
-A: Your data cannot be recovered. This is intentional - it's what makes the encryption meaningful. We recommend using a password manager.
+A: With dual-access encryption (default), we can help you recover access using our backup key. With private encryption, your data cannot be recovered - this is intentional for maximum security. We recommend using a password manager.
 
 **Q: Is my data encrypted during optimization?**
 A: During the brief processing time, your sequence must be decrypted in server memory. It is never stored unencrypted and is cleared from memory immediately after processing.
