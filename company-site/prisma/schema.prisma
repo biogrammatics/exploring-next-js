@@ -366,6 +366,7 @@ model Vector {
   // Availability flags
   availableForSale         Boolean @default(true)
   availableForSubscription Boolean @default(true)
+  isPublic                 Boolean @default(true) // Whether visible in public catalog
 
   // Pricing (stored in cents)
   salePrice         Int?
@@ -508,6 +509,9 @@ model PichiaStrain {
   // File storage
   hasFiles  Boolean @default(false)
   fileNotes String?
+
+  // Visibility
+  isPublic Boolean @default(true) // Whether visible in public catalog
 
   // Relations
   strainTypeId    String?

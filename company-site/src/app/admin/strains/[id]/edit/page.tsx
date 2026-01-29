@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import { DeleteButton } from "@/app/components/admin/delete-button";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -15,6 +16,11 @@ export default async function EditStrainPage({ params }: PageProps) {
       include: {
         strainType: true,
         productStatus: true,
+        _count: {
+          select: {
+            strainOrderItems: true,
+          },
+        },
       },
     }),
     prisma.strainType.findMany({ orderBy: { name: "asc" } }),
@@ -24,6 +30,9 @@ export default async function EditStrainPage({ params }: PageProps) {
   if (!strain) {
     notFound();
   }
+
+  const hasOrders = strain._count.strainOrderItems > 0;
+  const canDelete = !hasOrders;
 
   async function updateStrain(formData: FormData) {
     "use server";
@@ -45,11 +54,44 @@ export default async function EditStrainPage({ params }: PageProps) {
       citations: formData.get("citations") as string || null,
       strainTypeId: formData.get("strainTypeId") as string || null,
       productStatusId: formData.get("productStatusId") as string,
+      isPublic: formData.get("isPublic") === "on",
     };
 
     await prisma.pichiaStrain.update({
       where: { id },
       data,
+    });
+
+    redirect("/admin/strains");
+  }
+
+  async function deleteStrain() {
+    "use server";
+
+    // Double-check that strain can be deleted
+    const strainWithCounts = await prisma.pichiaStrain.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            strainOrderItems: true,
+          },
+        },
+      },
+    });
+
+    if (!strainWithCounts) {
+      redirect("/admin/strains");
+    }
+
+    if (strainWithCounts._count.strainOrderItems > 0) {
+      // Cannot delete - has related orders
+      throw new Error("Cannot delete strain with existing orders");
+    }
+
+    // Delete the strain
+    await prisma.pichiaStrain.delete({
+      where: { id },
     });
 
     redirect("/admin/strains");
@@ -293,6 +335,26 @@ export default async function EditStrainPage({ params }: PageProps) {
             />
           </div>
 
+          <h3 className="text-lg font-medium text-gray-800 pt-4 border-t">
+            Visibility
+          </h3>
+
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="isPublic"
+              name="isPublic"
+              defaultChecked={strain.isPublic}
+              className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <label htmlFor="isPublic" className="text-sm text-gray-700">
+              Show in public catalog
+            </label>
+          </div>
+          <p className="text-xs text-gray-500 -mt-4">
+            Uncheck to hide this strain from the public catalog. Users who have purchased this strain will still be able to access it.
+          </p>
+
           <div className="flex gap-4 pt-4">
             <button
               type="submit"
@@ -309,6 +371,37 @@ export default async function EditStrainPage({ params }: PageProps) {
           </div>
         </div>
       </form>
+
+      {/* Delete Section */}
+      <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-2xl mt-6">
+        <h2 className="text-lg font-semibold text-red-800 mb-2">Danger Zone</h2>
+        {canDelete ? (
+          <>
+            <p className="text-sm text-red-700 mb-4">
+              Deleting this strain is permanent and cannot be undone.
+            </p>
+            <DeleteButton
+              action={deleteStrain}
+              confirmMessage={`Are you sure you want to delete "${strain.name}"? This action cannot be undone.`}
+              buttonText="Delete Strain"
+            />
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-red-700 mb-2">
+              This strain cannot be deleted because it has associated records:
+            </p>
+            <ul className="text-sm text-red-700 list-disc list-inside mb-4">
+              {hasOrders && (
+                <li>{strain._count.strainOrderItems} order(s)</li>
+              )}
+            </ul>
+            <p className="text-sm text-gray-600">
+              Consider hiding this strain from the public catalog instead by unchecking &quot;Show in public catalog&quot; above.
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 }

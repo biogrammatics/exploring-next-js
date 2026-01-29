@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 export default async function StrainsPage() {
   const strains = await prisma.pichiaStrain.findMany({
     where: {
+      isPublic: true,
       productStatus: {
         isAvailable: true,
       },

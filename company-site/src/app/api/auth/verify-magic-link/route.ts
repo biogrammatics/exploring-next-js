@@ -130,10 +130,10 @@ export async function GET(request: NextRequest) {
       path: "/",
     });
 
-    // Redirect to account page with team login indicator if applicable
+    // Redirect to home page (with team login indicator if applicable)
     const redirectUrl = isTeamLogin
-      ? "/account?team_login=true"
-      : "/account";
+      ? "/?team_login=true"
+      : "/";
 
     return NextResponse.redirect(new URL(redirectUrl, baseUrl));
   } catch (error) {

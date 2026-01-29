@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -8,6 +9,7 @@ interface PageProps {
 
 export default async function StrainDetailPage({ params }: PageProps) {
   const { id } = await params;
+  const session = await auth();
 
   const strain = await prisma.pichiaStrain.findUnique({
     where: { id },
@@ -19,6 +21,28 @@ export default async function StrainDetailPage({ params }: PageProps) {
 
   if (!strain) {
     notFound();
+  }
+
+  // If strain is not public, check if user has purchased it
+  if (!strain.isPublic) {
+    let hasPurchased = false;
+
+    if (session?.user?.id) {
+      const purchase = await prisma.strainOrderItem.findFirst({
+        where: {
+          strainId: id,
+          order: {
+            userId: session.user.id,
+            status: { in: ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"] },
+          },
+        },
+      });
+      hasPurchased = !!purchase;
+    }
+
+    if (!hasPurchased) {
+      notFound();
+    }
   }
 
   const formatPrice = (cents: number) => {
