@@ -7,7 +7,7 @@ interface ThumbnailUploadProps {
   onThumbnailChange: (base64: string | null) => void;
 }
 
-const THUMBNAIL_SIZE = 400;
+const THUMBNAIL_SIZE = 600;
 
 export function ThumbnailUpload({
   currentThumbnail,
@@ -59,6 +59,10 @@ export function ThumbnailUpload({
             return;
           }
 
+          // Enable high-quality image smoothing
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+
           // Calculate crop to make square (center crop)
           const size = Math.min(img.width, img.height);
           const offsetX = (img.width - size) / 2;
@@ -81,8 +85,8 @@ export function ThumbnailUpload({
             THUMBNAIL_SIZE
           );
 
-          // Convert to WebP (or PNG fallback)
-          let base64 = canvas.toDataURL("image/webp", 0.85);
+          // Convert to WebP with high quality (or PNG fallback)
+          let base64 = canvas.toDataURL("image/webp", 0.95);
 
           // Fallback to PNG if WebP not supported
           if (!base64.startsWith("data:image/webp")) {
@@ -176,7 +180,7 @@ export function ThumbnailUpload({
           )}
 
           <p className="text-xs text-gray-500 max-w-[150px]">
-            Image will be cropped to 400×400px square and converted to WebP
+            Image will be cropped to 600×600px square and converted to WebP
           </p>
         </div>
       </div>

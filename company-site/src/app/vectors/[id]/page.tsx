@@ -76,18 +76,20 @@ export default async function VectorDetailPage({ params }: PageProps) {
             if (imageFile || vector.thumbnailBase64) {
               return (
                 <div className="mb-8 flex justify-center">
-                  <div className="w-full max-w-lg bg-white rounded-lg overflow-hidden shadow-sm border">
+                  <div className="bg-white rounded-lg overflow-hidden shadow-sm border">
                     {imageFile ? (
                       <img
                         src={`/api/admin/files/${imageFile.id}/view`}
                         alt={`${vector.name} vector map`}
-                        className="w-full h-auto"
+                        className="max-w-full h-auto"
+                        style={{ maxWidth: "600px" }}
                       />
                     ) : vector.thumbnailBase64 ? (
                       <img
                         src={vector.thumbnailBase64}
                         alt={`${vector.name} vector map`}
-                        className="w-full h-auto"
+                        className="max-w-full h-auto"
+                        style={{ maxWidth: "600px" }}
                       />
                     ) : null}
                   </div>
