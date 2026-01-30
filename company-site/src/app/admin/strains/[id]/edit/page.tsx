@@ -99,11 +99,8 @@ export default async function EditStrainPage({ params }: PageProps) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="mb-8">
         <h1 className="text-3xl font-bold">Edit Strain</h1>
-        <Link href="/admin/strains" className="text-gray-600 hover:text-gray-800">
-          Cancel
-        </Link>
       </div>
 
       <form action={updateStrain} className="bg-white border rounded-lg p-6 max-w-2xl">

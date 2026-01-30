@@ -159,19 +159,8 @@ export default async function EditVectorPage({ params }: PageProps) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="mb-8">
         <h1 className="text-3xl font-bold">Edit Vector</h1>
-        <div className="flex items-center gap-4">
-          <Link
-            href={`/admin/vectors/${id}/lots`}
-            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200"
-          >
-            Manage Lots
-          </Link>
-          <Link href="/admin/vectors" className="text-gray-600 hover:text-gray-800">
-            Cancel
-          </Link>
-        </div>
       </div>
 
       <VectorEditForm
