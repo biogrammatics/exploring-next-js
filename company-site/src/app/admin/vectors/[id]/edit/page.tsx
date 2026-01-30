@@ -193,6 +193,7 @@ export default async function EditVectorPage({ params }: PageProps) {
           hostOrganismId: vector.hostOrganismId,
           productStatusId: vector.productStatusId,
           thumbnailBase64: vector.thumbnailBase64,
+          hasImageFile: vector.files.some((f) => f.fileType === "IMAGE"),
         }}
         promoters={promoters}
         selectionMarkers={selectionMarkers}
@@ -202,58 +203,63 @@ export default async function EditVectorPage({ params }: PageProps) {
         updateAction={updateVector}
       />
 
-      {/* Files Section */}
-      <div className="bg-white border rounded-lg p-6 max-w-2xl mt-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Vector Files</h2>
-          <Link
-            href={`/admin/vectors/${id}/files/new`}
-            className="bg-blue-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-blue-700"
-          >
-            Upload File
-          </Link>
-        </div>
-
-        {vector.files.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded-lg">
-            <p>No files uploaded yet.</p>
-            <p className="text-sm mt-1">
-              Upload SnapGene maps, GenBank files, or product documentation.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {vector.files.map((file) => (
-              <div
-                key={file.id}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+      {/* Files Section - exclude IMAGE files which are managed by the image upload above */}
+      {(() => {
+        const downloadableFiles = vector.files.filter((f) => f.fileType !== "IMAGE");
+        return (
+          <div className="bg-white border rounded-lg p-6 max-w-2xl mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Downloadable Files</h2>
+              <Link
+                href={`/admin/vectors/${id}/files/new`}
+                className="bg-blue-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-blue-700"
               >
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">
-                    {file.fileName}
-                    {file.isPrimary && (
-                      <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">
-                        Primary
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {getFileTypeLabel(file.fileType)} •{" "}
-                    {formatFileSize(file.fileSize)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 ml-4">
-                  <DeleteLinkButton
-                    action={deleteFile}
-                    confirmMessage="Delete this file?"
-                    hiddenInputs={{ fileId: file.id }}
-                  />
-                </div>
+                Upload File
+              </Link>
+            </div>
+
+            {downloadableFiles.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded-lg">
+                <p>No downloadable files yet.</p>
+                <p className="text-sm mt-1">
+                  Upload SnapGene maps, GenBank files, or product documentation.
+                </p>
               </div>
-            ))}
+            ) : (
+              <div className="space-y-3">
+                {downloadableFiles.map((file) => (
+                  <div
+                    key={file.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">
+                        {file.fileName}
+                        {file.isPrimary && (
+                          <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">
+                            Primary
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {getFileTypeLabel(file.fileType)} •{" "}
+                        {formatFileSize(file.fileSize)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-4">
+                      <DeleteLinkButton
+                        action={deleteFile}
+                        confirmMessage="Delete this file?"
+                        hiddenInputs={{ fileId: file.id }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        );
+      })()}
 
       {/* Delete Section */}
       <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-2xl mt-6">

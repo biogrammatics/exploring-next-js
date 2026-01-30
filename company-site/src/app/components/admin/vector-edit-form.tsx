@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ThumbnailUpload } from "./thumbnail-upload";
+import { useRouter } from "next/navigation";
+import { VectorImageUpload } from "./vector-image-upload";
 
 interface VectorData {
   id: string;
@@ -21,6 +22,7 @@ interface VectorData {
   hostOrganismId: string | null;
   productStatusId: string;
   thumbnailBase64: string | null;
+  hasImageFile?: boolean;
 }
 
 interface SelectOption {
@@ -48,9 +50,21 @@ export function VectorEditForm({
   productStatuses,
   updateAction,
 }: VectorEditFormProps) {
+  const router = useRouter();
   const [thumbnailBase64, setThumbnailBase64] = useState<string | null>(
     vector.thumbnailBase64
   );
+
+  const handleImageUploadComplete = (newThumbnail: string) => {
+    setThumbnailBase64(newThumbnail);
+    // Refresh the page to show the updated file list
+    router.refresh();
+  };
+
+  const handleImageRemove = () => {
+    setThumbnailBase64(null);
+    router.refresh();
+  };
 
   return (
     <form action={updateAction} className="bg-white border rounded-lg p-6 max-w-2xl">
@@ -58,10 +72,13 @@ export function VectorEditForm({
       <input type="hidden" name="thumbnailBase64" value={thumbnailBase64 || ""} />
 
       <div className="space-y-6">
-        {/* Thumbnail Upload */}
-        <ThumbnailUpload
+        {/* Vector Map Image Upload */}
+        <VectorImageUpload
+          vectorId={vector.id}
           currentThumbnail={thumbnailBase64}
-          onThumbnailChange={setThumbnailBase64}
+          hasExistingImage={vector.hasImageFile}
+          onUploadComplete={handleImageUploadComplete}
+          onRemove={handleImageRemove}
         />
 
         <div>

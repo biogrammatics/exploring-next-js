@@ -78,18 +78,19 @@ export default async function VectorDetailPage({ params }: PageProps) {
                 <div className="mb-8 flex justify-center">
                   <div className="bg-white rounded-lg overflow-hidden shadow-sm border">
                     {imageFile ? (
+                      // Full-res S3 image - display at native size up to container width
                       <img
                         src={`/api/admin/files/${imageFile.id}/view`}
                         alt={`${vector.name} vector map`}
                         className="max-w-full h-auto"
-                        style={{ maxWidth: "600px" }}
                       />
                     ) : vector.thumbnailBase64 ? (
+                      // Fallback to thumbnail - constrain to 400px (its native size)
                       <img
                         src={vector.thumbnailBase64}
                         alt={`${vector.name} vector map`}
                         className="max-w-full h-auto"
-                        style={{ maxWidth: "600px" }}
+                        style={{ maxWidth: "400px" }}
                       />
                     ) : null}
                   </div>
@@ -247,51 +248,55 @@ export default async function VectorDetailPage({ params }: PageProps) {
             </div>
           )}
 
-          {/* Downloadable Files */}
-          {vector.files.length > 0 && (
-            <div className="mb-8">
-              <h2 className="text-lg font-semibold mb-4 text-gray-800">Downloads</h2>
-              <div className="grid gap-3">
-                {vector.files.map((file) => (
-                  <a
-                    key={file.id}
-                    href={`/api/admin/files/${file.id}/download`}
-                    className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <svg
-                          className="w-5 h-5 text-blue-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
+          {/* Downloadable Files - exclude IMAGE files which are only for display */}
+          {(() => {
+            const downloadableFiles = vector.files.filter((f) => f.fileType !== "IMAGE");
+            if (downloadableFiles.length === 0) return null;
+            return (
+              <div className="mb-8">
+                <h2 className="text-lg font-semibold mb-4 text-gray-800">Downloads</h2>
+                <div className="grid gap-3">
+                  {downloadableFiles.map((file) => (
+                    <a
+                      key={file.id}
+                      href={`/api/admin/files/${file.id}/download`}
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <svg
+                            className="w-5 h-5 text-blue-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                            />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-800">{file.fileName}</p>
+                          <p className="text-sm text-gray-500">
+                            {getFileTypeLabel(file.fileType)}
+                            {file.isPrimary && (
+                              <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">
+                                Primary
+                              </span>
+                            )}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-800">{file.fileName}</p>
-                        <p className="text-sm text-gray-500">
-                          {getFileTypeLabel(file.fileType)}
-                          {file.isPrimary && (
-                            <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">
-                              Primary
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-blue-600 text-sm font-medium">Download</span>
-                  </a>
-                ))}
+                      <span className="text-blue-600 text-sm font-medium">Download</span>
+                    </a>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Add to Cart - Placeholder */}
           <div className="flex gap-4">
