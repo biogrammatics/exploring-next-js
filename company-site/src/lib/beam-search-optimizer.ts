@@ -304,11 +304,20 @@ export class NinemerBeamSearchOptimizer {
   }
 
   /**
-   * Optimize a protein sequence to DNA using beam search
+   * Optimize a protein sequence to DNA using beam search.
+   * Optionally accepts additional exclusion patterns (e.g., restriction enzyme sites)
+   * that are merged with the base patterns from the constructor.
    */
-  optimize(proteinSeq: string): OptimizationResult {
+  optimize(proteinSeq: string, additionalExclusionPatterns?: string): OptimizationResult {
     const startTime = Date.now();
     const n = proteinSeq.length;
+
+    // Merge base exclusion patterns with per-job additional patterns
+    let effectivePatterns = this.exclusionPatterns;
+    if (additionalExclusionPatterns) {
+      const additionalParsed = parseExclusionPatterns(additionalExclusionPatterns);
+      effectivePatterns = [...this.exclusionPatterns, ...additionalParsed];
+    }
 
     // Validate protein sequence
     for (const aa of proteinSeq) {
@@ -344,8 +353,8 @@ export class NinemerBeamSearchOptimizer {
           let newScore = score;
 
           // Check exclusion patterns
-          if (this.exclusionPatterns.length > 0) {
-            if (containsExcludedPattern(newDna, this.exclusionPatterns)) {
+          if (effectivePatterns.length > 0) {
+            if (containsExcludedPattern(newDna, effectivePatterns)) {
               continue;
             }
           }

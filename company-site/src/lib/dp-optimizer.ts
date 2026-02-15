@@ -77,54 +77,175 @@ export function translateDna(dnaSeq: string): string {
 }
 
 /**
- * Exclusion pattern interface
+ * Constraint checker for homopolymeric amino acid runs.
+ * Ensures runs of 4+ identical AAs don't have 4+ identical codons.
  */
-interface ExclusionPattern {
-  name: string;
-  pattern: string;
-  regex: RegExp;
+class HomopolymerDiversityConstraint {
+  private runs: Array<{ start: number; length: number; aa: string }> = [];
+
+  constructor(proteinSeq: string, minLength = 4) {
+    let i = 0;
+    while (i < proteinSeq.length) {
+      const aa = proteinSeq[i];
+      const runStart = i;
+      let runLength = 1;
+
+      while (i + 1 < proteinSeq.length && proteinSeq[i + 1] === aa) {
+        runLength++;
+        i++;
+      }
+
+      // Record if run is long enough (skip M and W - single codon AAs)
+      if (runLength >= minLength && aa !== 'M' && aa !== 'W') {
+        this.runs.push({ start: runStart, length: runLength, aa });
+      }
+      i++;
+    }
+  }
+
+  hasRuns(): boolean {
+    return this.runs.length > 0;
+  }
+
+  isValidIncremental(dnaSequence: string, currentAaPos: number): boolean {
+    const dnaLen = dnaSequence.length;
+
+    for (const { start, length } of this.runs) {
+      if (!(start <= currentAaPos && currentAaPos < start + length)) {
+        continue;
+      }
+
+      const dnaStart = start * 3;
+      const codons: string[] = [];
+
+      for (let i = 0; i < length; i++) {
+        const codonPos = dnaStart + i * 3;
+        if (codonPos + 3 > dnaLen) break;
+        const codon = dnaSequence.slice(codonPos, codonPos + 3);
+        if (codon.length === 3) {
+          codons.push(codon);
+        }
+      }
+
+      if (codons.length < 4) continue;
+
+      // Check for 4+ consecutive identical codons
+      let consecutiveCount = 1;
+      for (let i = 1; i < codons.length; i++) {
+        if (codons[i] === codons[i - 1]) {
+          consecutiveCount++;
+          if (consecutiveCount >= 4) return false;
+        } else {
+          consecutiveCount = 1;
+        }
+      }
+    }
+    return true;
+  }
 }
 
 /**
- * Parse exclusion patterns from FASTA-like format
+ * Constraint checker for repeated 6-mer amino acid sequences.
+ * Ensures repeated 6-mers are encoded with different DNA sequences.
+ */
+class RepeatedSixmerConstraint {
+  private constraints: Map<number, number[]> = new Map();
+
+  constructor(proteinSeq: string) {
+    // Find all 6-mer positions
+    const sixmerPositions: Map<string, number[]> = new Map();
+    for (let i = 0; i <= proteinSeq.length - 6; i++) {
+      const sixmer = proteinSeq.slice(i, i + 6);
+      if (!sixmerPositions.has(sixmer)) {
+        sixmerPositions.set(sixmer, []);
+      }
+      sixmerPositions.get(sixmer)!.push(i);
+    }
+
+    // For repeated 6-mers, record constraints
+    sixmerPositions.forEach((positions, sixmer) => {
+      if (positions.length > 1) {
+        // Skip 6-mers that are only M and/or W
+        if (Array.from(sixmer).every(aa => aa === 'M' || aa === 'W')) {
+          return;
+        }
+
+        for (const pos of positions) {
+          const dnaStart = pos * 3;
+          const otherPositions = positions.filter(p => p !== pos).map(p => p * 3);
+          this.constraints.set(dnaStart, otherPositions);
+        }
+      }
+    });
+  }
+
+  hasRepeats(): boolean {
+    return this.constraints.size > 0;
+  }
+
+  isValidIncremental(dnaSequence: string, currentAaPos: number): boolean {
+    const dnaLen = dnaSequence.length;
+    const sixmerStartAa = currentAaPos - 5;
+    if (sixmerStartAa < 0) return true;
+
+    const sixmerStartDna = sixmerStartAa * 3;
+    const avoidPositions = this.constraints.get(sixmerStartDna);
+    if (!avoidPositions) return true;
+
+    const current18mer = dnaSequence.slice(sixmerStartDna, sixmerStartDna + 18);
+    if (current18mer.length < 18) return true;
+
+    for (const avoidPos of avoidPositions) {
+      if (avoidPos + 18 <= dnaLen) {
+        const avoid18mer = dnaSequence.slice(avoidPos, avoidPos + 18);
+        if (avoid18mer.length === 18 && current18mer === avoid18mer) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+}
+
+/**
+ * Exclusion pattern with optional codon alignment requirement
+ */
+interface ExclusionPattern {
+  original: string;
+  regex: RegExp;
+  isCodonAligned: boolean;
+}
+
+/**
+ * Parse exclusion patterns from text content
  */
 function parseExclusionPatterns(content: string): ExclusionPattern[] {
   const patterns: ExclusionPattern[] = [];
-  const lines = content.split('\n');
-  let currentName = '';
 
-  for (const line of lines) {
-    const trimmed = line.trim();
+  for (const line of content.split('\n')) {
+    // Remove comments and whitespace
+    const trimmed = line.split('#')[0].trim();
     if (!trimmed) continue;
 
-    if (trimmed.startsWith('>')) {
-      currentName = trimmed.slice(1);
-    } else if (currentName) {
-      try {
-        patterns.push({
-          name: currentName,
-          pattern: trimmed,
-          regex: new RegExp(trimmed, 'i')
-        });
-      } catch (e) {
-        console.warn(`Invalid regex pattern: ${trimmed}`, e);
-      }
-      currentName = '';
-    } else {
-      // Line-based format (one pattern per line)
-      const commentIdx = trimmed.indexOf('#');
-      const patternStr = commentIdx >= 0 ? trimmed.slice(0, commentIdx).trim() : trimmed;
-      if (patternStr) {
-        try {
-          patterns.push({
-            name: patternStr,
-            pattern: patternStr,
-            regex: new RegExp(patternStr, 'i')
-          });
-        } catch (e) {
-          console.warn(`Invalid regex pattern: ${patternStr}`, e);
-        }
-      }
+    // Skip FASTA-style header lines
+    if (trimmed.startsWith('>')) continue;
+
+    let patternStr = trimmed;
+    let isCodonAligned = false;
+
+    if (patternStr.endsWith('@codon')) {
+      isCodonAligned = true;
+      patternStr = patternStr.slice(0, -6).trim();
+    }
+
+    try {
+      patterns.push({
+        original: trimmed,
+        regex: new RegExp(patternStr, 'gi'),
+        isCodonAligned
+      });
+    } catch (e) {
+      console.warn(`Invalid regex pattern: ${patternStr}`, e);
     }
   }
 
@@ -148,6 +269,8 @@ export interface DPOptimizerOptions {
   pathsPerState?: number;
   exclusionPatterns?: string;
   maxPatternLength?: number;
+  enforceUniqueSixmers?: boolean;
+  enforceHomopolymerDiversity?: boolean;
 }
 
 /**
@@ -168,6 +291,8 @@ export class DPCodonOptimizer {
   private pathsPerState: number;
   private exclusionPatterns: ExclusionPattern[];
   private maxPatternLength: number;
+  private enforceUniqueSixmers: boolean;
+  private enforceHomopolymerDiversity: boolean;
 
   constructor(ninemerScores: NinemerScores, options: DPOptimizerOptions = {}) {
     this.ninemerScores = ninemerScores;
@@ -177,6 +302,8 @@ export class DPCodonOptimizer {
       ? parseExclusionPatterns(options.exclusionPatterns)
       : [];
     this.maxPatternLength = options.maxPatternLength ?? 100;
+    this.enforceUniqueSixmers = options.enforceUniqueSixmers ?? true;
+    this.enforceHomopolymerDiversity = options.enforceHomopolymerDiversity ?? true;
   }
 
   /**
@@ -191,17 +318,33 @@ export class DPCodonOptimizer {
   /**
    * Check if DNA sequence contains any excluded pattern (incremental)
    */
-  private containsExcludedPatternIncremental(dna: string): boolean {
-    if (this.exclusionPatterns.length === 0) return false;
+  private containsExcludedPatternIncremental(
+    dna: string,
+    patterns: ExclusionPattern[]
+  ): boolean {
+    if (patterns.length === 0) return false;
 
-    const windowStart = Math.max(0, dna.length - this.maxPatternLength);
+    const dnaLen = dna.length;
+    const windowStart = Math.max(0, dnaLen - this.maxPatternLength);
     const window = dna.slice(windowStart);
 
-    for (const { regex } of this.exclusionPatterns) {
+    for (const { regex, isCodonAligned } of patterns) {
       regex.lastIndex = 0;
-      if (regex.test(window)) {
-        return true;
+
+      if (isCodonAligned) {
+        let match;
+        while ((match = regex.exec(window)) !== null) {
+          const matchPosInFull = windowStart + match.index;
+          if (matchPosInFull % 3 === 0) {
+            return true;
+          }
+        }
+      } else {
+        if (regex.test(window)) {
+          return true;
+        }
       }
+      regex.lastIndex = 0;
     }
     return false;
   }
@@ -214,11 +357,20 @@ export class DPCodonOptimizer {
   }
 
   /**
-   * Optimize a protein sequence to DNA using DP with state pruning
+   * Optimize a protein sequence to DNA using DP with state pruning.
+   * Optionally accepts additional exclusion patterns (e.g., restriction enzyme sites)
+   * that are merged with the base patterns from the constructor.
    */
-  optimize(proteinSeq: string): DPOptimizationResult {
+  optimize(proteinSeq: string, additionalExclusionPatterns?: string): DPOptimizationResult {
     const startTime = Date.now();
     const n = proteinSeq.length;
+
+    // Merge base exclusion patterns with per-job additional patterns
+    let effectivePatterns = this.exclusionPatterns;
+    if (additionalExclusionPatterns) {
+      const additionalParsed = parseExclusionPatterns(additionalExclusionPatterns);
+      effectivePatterns = [...this.exclusionPatterns, ...additionalParsed];
+    }
 
     // Validate protein sequence
     for (const aa of proteinSeq) {
@@ -237,6 +389,15 @@ export class DPCodonOptimizer {
       };
     }
 
+    // Set up protein-specific constraints
+    const sixmerConstraint = this.enforceUniqueSixmers
+      ? new RepeatedSixmerConstraint(proteinSeq)
+      : null;
+
+    const homopolymerConstraint = this.enforceHomopolymerDiversity
+      ? new HomopolymerDiversityConstraint(proteinSeq)
+      : null;
+
     let numExcluded = 0;
 
     // Initialize with first two positions
@@ -251,9 +412,26 @@ export class DPCodonOptimizer {
         const dna = CODONS[c0] + CODONS[c1];
 
         // Check exclusion patterns
-        if (this.containsExcludedPatternIncremental(dna)) {
+        if (this.containsExcludedPatternIncremental(dna, effectivePatterns)) {
           numExcluded++;
           continue;
+        }
+
+        // Check homopolymer diversity constraint at positions 0 and 1
+        if (homopolymerConstraint?.hasRuns()) {
+          if (!homopolymerConstraint.isValidIncremental(dna, 0) ||
+              !homopolymerConstraint.isValidIncremental(dna, 1)) {
+            numExcluded++;
+            continue;
+          }
+        }
+
+        // Check repeated 6-mer constraint at position 1
+        if (sixmerConstraint?.hasRepeats()) {
+          if (!sixmerConstraint.isValidIncremental(dna, 1)) {
+            numExcluded++;
+            continue;
+          }
         }
 
         const stateKey = this.makeStateKey(c0, c1);
@@ -285,9 +463,25 @@ export class DPCodonOptimizer {
             const newDna = state.dna + codon;
 
             // Check exclusion patterns (incremental)
-            if (this.containsExcludedPatternIncremental(newDna)) {
+            if (this.containsExcludedPatternIncremental(newDna, effectivePatterns)) {
               numExcluded++;
               continue;
+            }
+
+            // Check repeated 6-mer constraint
+            if (sixmerConstraint?.hasRepeats()) {
+              if (!sixmerConstraint.isValidIncremental(newDna, pos)) {
+                numExcluded++;
+                continue;
+              }
+            }
+
+            // Check homopolymer diversity constraint
+            if (homopolymerConstraint?.hasRuns()) {
+              if (!homopolymerConstraint.isValidIncremental(newDna, pos)) {
+                numExcluded++;
+                continue;
+              }
             }
 
             // Score the 9-mer

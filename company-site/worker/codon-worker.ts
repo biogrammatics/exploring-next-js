@@ -2,7 +2,7 @@
  * Codon Optimization Background Worker
  *
  * This worker polls the database for pending codon optimization jobs
- * and processes them using beam search with 9-mer scoring.
+ * and processes them using DP optimization (primary) with beam search fallback.
  * It runs as a separate service on Render.
  *
  * Usage: npx tsx worker/codon-worker.ts
@@ -17,12 +17,17 @@ const { PrismaClient } = require("../src/generated/prisma/client");
 const { PrismaPg } = require("@prisma/adapter-pg");
 import { Resend } from "resend";
 
-// Import the beam search optimizer
+// Import both optimizers (DP primary, beam search fallback)
+import {
+  DPCodonOptimizer,
+  type NinemerScores,
+  type DPOptimizationResult,
+} from "../src/lib/dp-optimizer";
 import {
   NinemerBeamSearchOptimizer,
-  type NinemerScores,
   type OptimizationResult,
 } from "../src/lib/beam-search-optimizer";
+import { enzymeNamesToExclusionPatterns } from "../src/lib/restriction-enzymes";
 
 // Initialize clients
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
@@ -33,14 +38,15 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const POLL_INTERVAL_MS = 5000; // 5 seconds
 const BEAM_WIDTH = 100;
 
-// Global optimizer instance (loaded once at startup)
-let optimizer: NinemerBeamSearchOptimizer | null = null;
+// Global optimizer instances (loaded once at startup)
+let dpOptimizer: DPCodonOptimizer | null = null;
+let beamOptimizer: NinemerBeamSearchOptimizer | null = null;
 
 // ============================================================================
 // DATA LOADING
 // ============================================================================
 
-function loadOptimizer(): NinemerBeamSearchOptimizer {
+function loadOptimizers(): void {
   const dataDir = path.join(__dirname, "..", "data", "codon-optimization");
 
   // Load 9-mer scoring matrix
@@ -52,11 +58,20 @@ function loadOptimizer(): NinemerBeamSearchOptimizer {
     `[${new Date().toISOString()}] Loaded ${Object.keys(ninemerScores).length} amino acid triplets`
   );
 
-  // Load exclusion patterns
+  // Load universal exclusion patterns
   const exclusionsPath = path.join(dataDir, "exclusions.txt");
   const exclusionPatterns = fs.readFileSync(exclusionsPath, "utf-8");
 
-  return new NinemerBeamSearchOptimizer(ninemerScores, {
+  // Initialize DP optimizer (primary)
+  dpOptimizer = new DPCodonOptimizer(ninemerScores, {
+    beamWidth: BEAM_WIDTH,
+    exclusionPatterns,
+    enforceUniqueSixmers: true,
+    enforceHomopolymerDiversity: true,
+  });
+
+  // Initialize beam search optimizer (fallback)
+  beamOptimizer = new NinemerBeamSearchOptimizer(ninemerScores, {
     beamWidth: BEAM_WIDTH,
     exclusionPatterns,
     enforceUniqueSixmers: true,
@@ -124,11 +139,15 @@ function preprocessProteinSequence(sequence: string): {
 }
 
 /**
- * Perform codon optimization using beam search
+ * Perform codon optimization using DP (primary) with beam search fallback.
+ * Accepts optional per-job exclusion patterns for restriction enzyme sites.
  */
-function optimizeCodon(proteinSequence: string): OptimizationResult {
-  if (!optimizer) {
-    return { success: false, error: "Optimizer not initialized" };
+function optimizeCodon(
+  proteinSequence: string,
+  additionalExclusionPatterns?: string
+): DPOptimizationResult | OptimizationResult {
+  if (!dpOptimizer || !beamOptimizer) {
+    return { success: false, error: "Optimizers not initialized" };
   }
 
   // Preprocess the sequence
@@ -137,8 +156,24 @@ function optimizeCodon(proteinSequence: string): OptimizationResult {
     return { success: false, error: preprocessed.error };
   }
 
-  // Run optimization
-  return optimizer.optimize(preprocessed.processedSequence);
+  // Try DP optimizer first (primary)
+  const dpResult = dpOptimizer.optimize(
+    preprocessed.processedSequence,
+    additionalExclusionPatterns
+  );
+
+  if (dpResult.success) {
+    return dpResult;
+  }
+
+  // Fallback to beam search if DP fails
+  console.log(
+    `[${new Date().toISOString()}] DP optimizer failed, falling back to beam search: ${dpResult.error}`
+  );
+  return beamOptimizer.optimize(
+    preprocessed.processedSequence,
+    additionalExclusionPatterns
+  );
 }
 
 // ============================================================================
@@ -330,8 +365,19 @@ async function processJob(jobId: string): Promise<void> {
       },
     });
 
+    // Build per-job exclusion patterns from stored enzyme names
+    let additionalExclusionPatterns: string | undefined;
+    if (job.excludedEnzymeNames) {
+      const enzymeNames = job.excludedEnzymeNames.split(",");
+      additionalExclusionPatterns =
+        enzymeNamesToExclusionPatterns(enzymeNames);
+    }
+
     // Perform codon optimization
-    const result = optimizeCodon(job.proteinSequence);
+    const result = optimizeCodon(
+      job.proteinSequence,
+      additionalExclusionPatterns
+    );
 
     if (result.success && result.dnaSequence) {
       // Update job with results
@@ -483,9 +529,9 @@ async function main(): Promise<void> {
   console.log(`[${new Date().toISOString()}] Poll interval: ${POLL_INTERVAL_MS}ms`);
   console.log(`[${new Date().toISOString()}] Beam width: ${BEAM_WIDTH}`);
 
-  // Load the optimizer on startup
-  optimizer = loadOptimizer();
-  console.log(`[${new Date().toISOString()}] Optimizer initialized`);
+  // Load both optimizers on startup
+  loadOptimizers();
+  console.log(`[${new Date().toISOString()}] Optimizers initialized (DP primary, beam search fallback)`);
 
   // Main loop
   while (true) {

@@ -951,6 +951,11 @@ model CodonOptimizationJob {
   targetOrganism    String   @default("pichia")  // e.g., "pichia", "ecoli"
   notificationEmail String?
 
+  // Restriction enzyme exclusion choices
+  vectorName          String?              // Selected BioGrammatics vector (e.g., "pPICZ-A")
+  goldenGateExclusion Boolean @default(false) // Whether Golden Gate Type IIS sites were excluded
+  excludedEnzymeNames String?              // Comma-separated resolved enzyme names (e.g., "PmeI,SwaI,BsaI")
+
   // Output
   dnaSequence       String?  @db.Text
   errorMessage      String?

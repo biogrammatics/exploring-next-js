@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { validateProteinSequence } from "@/lib/codon-optimization";
+import {
+  getEnzymesForPromoter,
+  GOLDEN_GATE_ENZYMES,
+} from "@/lib/restriction-enzymes";
 
 /**
  * POST /api/codon-optimization
@@ -17,6 +21,8 @@ export async function POST(request: NextRequest) {
       proteinName,
       targetOrganism = "pichia",
       notificationEmail,
+      vectorName,
+      goldenGateExclusion,
     } = body;
 
     // Validate required fields
@@ -40,6 +46,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Resolve restriction enzyme exclusions based on vector and Golden Gate choices
+    const excludedEnzymes: string[] = [];
+
+    if (vectorName) {
+      const vector = await prisma.vector.findUnique({
+        where: { name: vectorName },
+        include: { promoter: true },
+      });
+      if (!vector) {
+        return NextResponse.json(
+          { error: `Unknown vector: ${vectorName}` },
+          { status: 400 }
+        );
+      }
+      if (vector.promoter) {
+        for (const enz of getEnzymesForPromoter(vector.promoter.name)) {
+          if (!excludedEnzymes.includes(enz)) {
+            excludedEnzymes.push(enz);
+          }
+        }
+      }
+    }
+
+    if (goldenGateExclusion) {
+      for (const enz of GOLDEN_GATE_ENZYMES) {
+        if (!excludedEnzymes.includes(enz)) {
+          excludedEnzymes.push(enz);
+        }
+      }
+    }
+
     // Create the job
     const job = await prisma.codonOptimizationJob.create({
       data: {
@@ -49,6 +86,10 @@ export async function POST(request: NextRequest) {
         notificationEmail: notificationEmail || session?.user?.email || null,
         userId: session?.user?.id || null,
         status: "PENDING",
+        vectorName: vectorName || null,
+        goldenGateExclusion: !!goldenGateExclusion,
+        excludedEnzymeNames:
+          excludedEnzymes.length > 0 ? excludedEnzymes.join(",") : null,
       },
     });
 

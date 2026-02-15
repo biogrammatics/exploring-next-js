@@ -10,6 +10,9 @@ interface JobStatus {
   targetOrganism: string;
   dnaSequence: string | null;
   errorMessage: string | null;
+  vectorName: string | null;
+  goldenGateExclusion: boolean;
+  excludedEnzymeNames: string | null;
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
@@ -20,11 +23,21 @@ interface JobStatus {
   } | null;
 }
 
+const EXPRESSION_VECTORS = [
+  { name: "pPICZ-A", label: "pPICZ-A (AOX1 / Zeocin)" },
+  { name: "pPICZ-B", label: "pPICZ-B (AOX1 / Zeocin)" },
+  { name: "pGAPZ-A", label: "pGAPZ-A (GAP / Zeocin)" },
+  { name: "pPIC9K", label: "pPIC9K (AOX1 / G418)" },
+  { name: "pTEF1-Zeo", label: "pTEF1-Zeo (TEF1 / Zeocin)" },
+];
+
 export default function CodonOptimizationPage() {
   const [proteinSequence, setProteinSequence] = useState("");
   const [proteinName, setProteinName] = useState("");
   const [targetOrganism, setTargetOrganism] = useState("pichia");
   const [notificationEmail, setNotificationEmail] = useState("");
+  const [selectedVector, setSelectedVector] = useState("");
+  const [goldenGateExclusion, setGoldenGateExclusion] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -90,6 +103,8 @@ export default function CodonOptimizationPage() {
           proteinName: proteinName || undefined,
           targetOrganism,
           notificationEmail: notificationEmail || undefined,
+          vectorName: selectedVector || undefined,
+          goldenGateExclusion,
         }),
       });
 
@@ -255,6 +270,24 @@ export default function CodonOptimizationPage() {
                   </div>
                 )}
 
+                {/* Restriction enzyme exclusions */}
+                {jobStatus.excludedEnzymeNames && (
+                  <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                    <h4 className="text-sm font-medium text-gray-700 mb-1">
+                      Restriction Enzyme Exclusions
+                    </h4>
+                    <p className="text-sm text-gray-600">
+                      {jobStatus.vectorName && (
+                        <>Vector: {jobStatus.vectorName}. </>
+                      )}
+                      {jobStatus.goldenGateExclusion && (
+                        <>Golden Gate compatible. </>
+                      )}
+                      Excluded: {jobStatus.excludedEnzymeNames.split(",").join(", ")}
+                    </p>
+                  </div>
+                )}
+
                 {/* DNA Sequence */}
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-2">
@@ -402,6 +435,57 @@ export default function CodonOptimizationPage() {
                   <option value="human">Human (H. sapiens)</option>
                   <option value="cho">CHO cells</option>
                 </select>
+              </div>
+            </div>
+
+            {/* Cloning options */}
+            <div className="border border-gray-200 rounded-lg p-4 space-y-4">
+              <h3 className="text-sm font-semibold text-gray-800">Cloning Options</h3>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                {/* Expression vector */}
+                <div>
+                  <label
+                    htmlFor="vector"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Expression Vector
+                  </label>
+                  <select
+                    id="vector"
+                    value={selectedVector}
+                    onChange={(e) => setSelectedVector(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">No vector selected</option>
+                    {EXPRESSION_VECTORS.map((v) => (
+                      <option key={v.name} value={v.name}>
+                        {v.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Automatically excludes restriction sites used by this vector.
+                  </p>
+                </div>
+
+                {/* Golden Gate toggle */}
+                <div className="flex items-start gap-3 pt-7">
+                  <input
+                    type="checkbox"
+                    id="goldenGate"
+                    checked={goldenGateExclusion}
+                    onChange={(e) => setGoldenGateExclusion(e.target.checked)}
+                    className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor="goldenGate" className="text-sm text-gray-700">
+                    <span className="font-medium">Golden Gate compatible</span>
+                    <br />
+                    <span className="text-gray-500">
+                      Excludes BsaI, BbsI, BsmBI, and SapI sites
+                    </span>
+                  </label>
+                </div>
               </div>
             </div>
 

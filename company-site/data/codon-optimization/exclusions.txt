@@ -3,9 +3,10 @@
 # One pattern per line. Lines starting with # are comments.
 # Patterns are Python regex (case-insensitive by default).
 
-# Common Restriction Sites
-# -------------------------
-GTTTAAAC              # PmeI
+# NOTE: Restriction enzyme sites are no longer listed here.
+# They are now handled dynamically per job based on the user's
+# choice of cloning vector and assembly strategy (e.g., Golden Gate).
+# See src/lib/restriction-enzymes.ts for the enzyme registry.
 
 # Homopolymer Runs (6 or more bases)
 # -----------------------------------
