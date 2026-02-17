@@ -23,21 +23,31 @@ interface JobStatus {
   } | null;
 }
 
-const EXPRESSION_VECTORS = [
-  { name: "pPICZ-A", label: "pPICZ-A (AOX1 / Zeocin)" },
-  { name: "pPICZ-B", label: "pPICZ-B (AOX1 / Zeocin)" },
-  { name: "pGAPZ-A", label: "pGAPZ-A (GAP / Zeocin)" },
-  { name: "pPIC9K", label: "pPIC9K (AOX1 / G418)" },
-  { name: "pTEF1-Zeo", label: "pTEF1-Zeo (TEF1 / Zeocin)" },
-];
+// Hardcoded exclusion patterns for standard cloning options
+const STANDARD_EXCLUSIONS = {
+  aox1: {
+    label: "BioGrammatics AOX1 promoter vectors (excludes PmeI)",
+    patterns: ["GTTTAAAC"],
+  },
+  upps: {
+    label: "BioGrammatics UPPs promoter vectors (excludes EcoRV, AleI)",
+    patterns: ["GATATC", "CAC[ACGT]{4}GTG"],
+  },
+  goldenGate: {
+    label: "Golden Gate cloning into BioGrammatics vectors (excludes BsaI)",
+    patterns: ["GGTCTC", "GAGACC"],
+  },
+} as const;
 
 export default function CodonOptimizationPage() {
   const [proteinSequence, setProteinSequence] = useState("");
   const [proteinName, setProteinName] = useState("");
-  const [targetOrganism, setTargetOrganism] = useState("pichia");
   const [notificationEmail, setNotificationEmail] = useState("");
-  const [selectedVector, setSelectedVector] = useState("");
+  const [exclusionMode, setExclusionMode] = useState<"standard" | "advanced">("standard");
+  const [aox1Exclusion, setAox1Exclusion] = useState(false);
+  const [uppsExclusion, setUppsExclusion] = useState(false);
   const [goldenGateExclusion, setGoldenGateExclusion] = useState(false);
+  const [customExclusionPatterns, setCustomExclusionPatterns] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -95,16 +105,39 @@ export default function CodonOptimizationPage() {
     setIsSubmitting(true);
 
     try {
+      // Build exclusion patterns from form state
+      const excludedPatterns: string[] = [];
+      if (exclusionMode === "standard") {
+        if (aox1Exclusion) excludedPatterns.push(...STANDARD_EXCLUSIONS.aox1.patterns);
+        if (uppsExclusion) excludedPatterns.push(...STANDARD_EXCLUSIONS.upps.patterns);
+        if (goldenGateExclusion) excludedPatterns.push(...STANDARD_EXCLUSIONS.goldenGate.patterns);
+      } else {
+        // Advanced mode: parse comma-delimited DNA sequences
+        const custom = customExclusionPatterns
+          .split(",")
+          .map((s) => s.trim().toUpperCase())
+          .filter((s) => s.length > 0);
+        for (const seq of custom) {
+          excludedPatterns.push(seq);
+          // Add reverse complement for non-palindromic sequences
+          const rc = seq
+            .split("")
+            .reverse()
+            .map((b) => ({ A: "T", T: "A", G: "C", C: "G" })[b] || b)
+            .join("");
+          if (rc !== seq) excludedPatterns.push(rc);
+        }
+      }
+
       const response = await fetch("/api/codon-optimization", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           proteinSequence,
           proteinName: proteinName || undefined,
-          targetOrganism,
+          targetOrganism: "pichia",
           notificationEmail: notificationEmail || undefined,
-          vectorName: selectedVector || undefined,
-          goldenGateExclusion,
+          excludedPatterns: excludedPatterns.length > 0 ? excludedPatterns : undefined,
         }),
       });
 
@@ -270,20 +303,14 @@ export default function CodonOptimizationPage() {
                   </div>
                 )}
 
-                {/* Restriction enzyme exclusions */}
+                {/* Restriction site exclusions */}
                 {jobStatus.excludedEnzymeNames && (
                   <div className="bg-gray-50 p-4 rounded-lg mb-6">
                     <h4 className="text-sm font-medium text-gray-700 mb-1">
-                      Restriction Enzyme Exclusions
+                      Excluded Restriction Sites
                     </h4>
-                    <p className="text-sm text-gray-600">
-                      {jobStatus.vectorName && (
-                        <>Vector: {jobStatus.vectorName}. </>
-                      )}
-                      {jobStatus.goldenGateExclusion && (
-                        <>Golden Gate compatible. </>
-                      )}
-                      Excluded: {jobStatus.excludedEnzymeNames.split(",").join(", ")}
+                    <p className="text-sm text-gray-600 font-mono">
+                      {jobStatus.excludedEnzymeNames.split(",").join(", ")}
                     </p>
                   </div>
                 )}
@@ -396,97 +423,113 @@ export default function CodonOptimizationPage() {
               </p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Protein name */}
-              <div>
-                <label
-                  htmlFor="proteinName"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Protein Name (optional)
-                </label>
-                <input
-                  type="text"
-                  id="proteinName"
-                  value={proteinName}
-                  onChange={(e) => setProteinName(e.target.value)}
-                  placeholder="e.g., GFP, Insulin"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              {/* Target organism */}
-              <div>
-                <label
-                  htmlFor="targetOrganism"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Target Organism
-                </label>
-                <select
-                  id="targetOrganism"
-                  value={targetOrganism}
-                  onChange={(e) => setTargetOrganism(e.target.value)}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="pichia">Pichia pastoris</option>
-                  <option value="ecoli">E. coli</option>
-                  <option value="yeast">S. cerevisiae</option>
-                  <option value="human">Human (H. sapiens)</option>
-                  <option value="cho">CHO cells</option>
-                </select>
-              </div>
+            {/* Protein name */}
+            <div>
+              <label
+                htmlFor="proteinName"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Protein Name (optional)
+              </label>
+              <input
+                type="text"
+                id="proteinName"
+                value={proteinName}
+                onChange={(e) => setProteinName(e.target.value)}
+                placeholder="e.g., GFP, Insulin"
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
 
-            {/* Cloning options */}
+            {/* Restriction site exclusions */}
             <div className="border border-gray-200 rounded-lg p-4 space-y-4">
-              <h3 className="text-sm font-semibold text-gray-800">Cloning Options</h3>
+              <h3 className="text-sm font-semibold text-gray-800">
+                Restriction Site Exclusions
+              </h3>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                {/* Expression vector */}
-                <div>
-                  <label
-                    htmlFor="vector"
-                    className="block text-sm font-medium text-gray-700 mb-2"
-                  >
-                    Expression Vector
-                  </label>
-                  <select
-                    id="vector"
-                    value={selectedVector}
-                    onChange={(e) => setSelectedVector(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">No vector selected</option>
-                    {EXPRESSION_VECTORS.map((v) => (
-                      <option key={v.name} value={v.name}>
-                        {v.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Automatically excludes restriction sites used by this vector.
-                  </p>
-                </div>
-
-                {/* Golden Gate toggle */}
-                <div className="flex items-start gap-3 pt-7">
+              {/* Radio buttons */}
+              <div className="flex gap-6">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
-                    type="checkbox"
-                    id="goldenGate"
-                    checked={goldenGateExclusion}
-                    onChange={(e) => setGoldenGateExclusion(e.target.checked)}
-                    className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    type="radio"
+                    name="exclusionMode"
+                    checked={exclusionMode === "standard"}
+                    onChange={() => setExclusionMode("standard")}
+                    className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                   />
-                  <label htmlFor="goldenGate" className="text-sm text-gray-700">
-                    <span className="font-medium">Golden Gate compatible</span>
-                    <br />
-                    <span className="text-gray-500">
-                      Excludes BsaI, BbsI, BsmBI, and SapI sites
+                  <span className="text-sm font-medium text-gray-700">
+                    Standard Options
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="exclusionMode"
+                    checked={exclusionMode === "advanced"}
+                    onChange={() => setExclusionMode("advanced")}
+                    className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    Advanced Options
+                  </span>
+                </label>
+              </div>
+
+              {/* Standard: checkboxes */}
+              {exclusionMode === "standard" && (
+                <div className="space-y-3 ml-1">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={aox1Exclusion}
+                      onChange={(e) => setAox1Exclusion(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      {STANDARD_EXCLUSIONS.aox1.label}
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={uppsExclusion}
+                      onChange={(e) => setUppsExclusion(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      {STANDARD_EXCLUSIONS.upps.label}
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={goldenGateExclusion}
+                      onChange={(e) => setGoldenGateExclusion(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      {STANDARD_EXCLUSIONS.goldenGate.label}
                     </span>
                   </label>
                 </div>
-              </div>
+              )}
+
+              {/* Advanced: free-text input */}
+              {exclusionMode === "advanced" && (
+                <div className="ml-1">
+                  <input
+                    type="text"
+                    value={customExclusionPatterns}
+                    onChange={(e) => setCustomExclusionPatterns(e.target.value)}
+                    placeholder="e.g., GGTCTC, GAATTC, GGATCC"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Enter DNA sequences to exclude, separated by commas. Reverse
+                    complements are added automatically.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Email notification */}

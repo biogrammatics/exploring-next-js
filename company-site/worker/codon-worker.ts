@@ -27,7 +27,7 @@ import {
   NinemerBeamSearchOptimizer,
   type OptimizationResult,
 } from "../src/lib/beam-search-optimizer";
-import { enzymeNamesToExclusionPatterns } from "../src/lib/restriction-enzymes";
+
 
 // Initialize clients
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
@@ -365,12 +365,15 @@ async function processJob(jobId: string): Promise<void> {
       },
     });
 
-    // Build per-job exclusion patterns from stored enzyme names
+    // Build per-job exclusion patterns from stored patterns
+    // excludedEnzymeNames now contains raw DNA patterns (e.g., "GGTCTC,GAGACC")
     let additionalExclusionPatterns: string | undefined;
     if (job.excludedEnzymeNames) {
-      const enzymeNames = job.excludedEnzymeNames.split(",");
-      additionalExclusionPatterns =
-        enzymeNamesToExclusionPatterns(enzymeNames);
+      const patterns = job.excludedEnzymeNames.split(",");
+      additionalExclusionPatterns = patterns
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0)
+        .join("\n");
     }
 
     // Perform codon optimization
