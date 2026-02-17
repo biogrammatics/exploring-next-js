@@ -112,21 +112,12 @@ export default function CodonOptimizationPage() {
         if (uppsExclusion) excludedPatterns.push(...STANDARD_EXCLUSIONS.upps.patterns);
         if (goldenGateExclusion) excludedPatterns.push(...STANDARD_EXCLUSIONS.goldenGate.patterns);
       } else {
-        // Advanced mode: parse comma-delimited DNA sequences
+        // Advanced mode: use patterns exactly as entered (no auto reverse complement)
         const custom = customExclusionPatterns
           .split(",")
           .map((s) => s.trim().toUpperCase())
           .filter((s) => s.length > 0);
-        for (const seq of custom) {
-          excludedPatterns.push(seq);
-          // Add reverse complement for non-palindromic sequences
-          const rc = seq
-            .split("")
-            .reverse()
-            .map((b) => ({ A: "T", T: "A", G: "C", C: "G" })[b] || b)
-            .join("");
-          if (rc !== seq) excludedPatterns.push(rc);
-        }
+        excludedPatterns.push(...custom);
       }
 
       const response = await fetch("/api/codon-optimization", {
@@ -525,8 +516,8 @@ export default function CodonOptimizationPage() {
                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
                   />
                   <p className="text-sm text-gray-500 mt-1">
-                    Enter DNA sequences to exclude, separated by commas. Reverse
-                    complements are added automatically.
+                    Enter DNA sequences to exclude, separated by commas. Add
+                    reverse complements separately if needed.
                   </p>
                 </div>
               )}
