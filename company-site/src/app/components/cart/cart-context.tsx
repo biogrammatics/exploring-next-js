@@ -2,11 +2,14 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 
+export type CartItemType = "vector" | "strain" | "product";
+
 export interface CartItem {
   id: string;
+  type: CartItemType;
   name: string;
-  price: number;
-  imageUrl: string | null;
+  price: number; // in cents
+  imageUrl: string | null; // thumbnail base64 or URL
   quantity: number;
 }
 

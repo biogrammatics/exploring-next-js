@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useCart } from "@/app/components/cart/cart-context";
 
 export default function CartPage() {
@@ -21,10 +20,10 @@ export default function CartPage() {
         <div className="glass-panel text-center py-12">
           <p className="text-gray-600 mb-4">Your cart is empty</p>
           <Link
-            href="/products"
+            href="/vectors"
             className="inline-block glass-button text-white px-6 py-2 rounded-lg"
           >
-            Browse Products
+            Browse Vectors
           </Link>
         </div>
       </main>
@@ -41,12 +40,11 @@ export default function CartPage() {
             {items.map((item) => (
               <div key={item.id} className="p-4 flex gap-4">
                 {item.imageUrl && (
-                  <div className="relative w-24 h-24 flex-shrink-0">
-                    <Image
+                  <div className="w-24 h-24 flex-shrink-0">
+                    <img
                       src={item.imageUrl}
                       alt={item.name}
-                      fill
-                      className="object-cover rounded"
+                      className="w-full h-full object-cover rounded"
                     />
                   </div>
                 )}
@@ -113,7 +111,7 @@ export default function CartPage() {
               Proceed to Checkout
             </Link>
             <Link
-              href="/products"
+              href="/vectors"
               className="block w-full text-center py-3 text-gray-600 hover:text-gray-900 mt-2"
             >
               Continue Shopping

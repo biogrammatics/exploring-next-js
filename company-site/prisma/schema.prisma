@@ -567,6 +567,7 @@ model Order {
   shippingState    String?
   shippingZip      String?
   shippingCountry  String?
+  shippingMethod   String? // e.g. "FedEx Priority Overnight"
 
   // Billing address
   billingName     String?

@@ -20,6 +20,7 @@ export function ProductCard({ product }: { product: Product }) {
     e.preventDefault();
     addItem({
       id: product.id,
+      type: "product",
       name: product.name,
       price: product.price,
       imageUrl: product.imageUrl,

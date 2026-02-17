@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import type { VectorFileType } from "@/generated/prisma/client";
+import { AddToCartButton } from "@/app/components/cart/add-to-cart-button";
 
 function getFileTypeLabel(type: VectorFileType) {
   switch (type) {
@@ -298,11 +299,24 @@ export default async function VectorDetailPage({ params }: PageProps) {
             );
           })()}
 
-          {/* Add to Cart - Placeholder */}
+          {/* Add to Cart / Actions */}
           <div className="flex gap-4">
-            <button className="glass-button text-white px-8 py-3 rounded-lg text-lg flex-1">
-              Add to Cart
-            </button>
+            {vector.salePrice && vector.availableForSale ? (
+              <AddToCartButton
+                productId={vector.id}
+                productType="vector"
+                name={vector.name}
+                price={vector.salePrice}
+                imageUrl={vector.thumbnailBase64}
+              />
+            ) : (
+              <button
+                disabled
+                className="bg-gray-300 text-gray-500 px-8 py-3 rounded-lg text-lg flex-1 cursor-not-allowed"
+              >
+                {vector.availableForSale ? "Price not set" : "Not available for sale"}
+              </button>
+            )}
             <Link
               href="/vectors"
               className="px-8 py-3 rounded-lg text-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"

@@ -20,13 +20,13 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
   const router = useRouter();
 
   const handleAddToCart = () => {
-    addItem(product, quantity);
+    addItem({ ...product, type: "product" }, quantity);
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
   };
 
   const handleBuyNow = () => {
-    addItem(product, quantity);
+    addItem({ ...product, type: "product" }, quantity);
     router.push("/cart");
   };
 
