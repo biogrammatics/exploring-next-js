@@ -26,15 +26,15 @@ interface JobStatus {
 // Hardcoded exclusion patterns for standard cloning options
 const STANDARD_EXCLUSIONS = {
   aox1: {
-    label: "BioGrammatics AOX1 promoter vectors (excludes PmeI)",
+    label: "BioGrammatics' AOX1 promoter vectors (excludes PmeI)",
     patterns: ["GTTTAAAC"],
   },
   upps: {
-    label: "BioGrammatics UPPs promoter vectors (excludes EcoRV, AleI)",
+    label: "BioGrammatics' UPPs promoter vectors (excludes EcoRV, AleI)",
     patterns: ["GATATC", "CAC[ACGT]{4}GTG"],
   },
   goldenGate: {
-    label: "Golden Gate cloning into BioGrammatics vectors (excludes BsaI)",
+    label: "Golden Gate cloning into BioGrammatics' vectors (excludes BsaI)",
     patterns: ["GGTCTC", "GAGACC"],
   },
 } as const;
@@ -394,8 +394,8 @@ export default function CodonOptimizationPage() {
           Codon Optimization
         </h1>
         <p className="text-white/80 mb-8">
-          Reverse translate protein sequences to DNA optimized for your target
-          organism
+          Reverse translate protein sequences to DNA optimized for{" "}
+          <em>Pichia pastoris</em>
         </p>
 
         <div className="glass-panel p-6">
@@ -593,12 +593,12 @@ export default function CodonOptimizationPage() {
               Codon optimization (reverse translation) converts a protein
               sequence into a DNA sequence that encodes the same protein. Because
               multiple codons can encode the same amino acid, optimization can
-              improve expression in your target organism.
+              improve expression in <em>Pichia pastoris</em>.
             </p>
             <p>
-              Our algorithm selects codons based on usage frequency in your
-              target organism. This can lead to improved protein expression,
-              faster translation rates, and higher yields.
+              Our algorithm selects codons based on usage patterns in highly
+              expressed <em>Pichia</em> genes. This can lead to improved protein
+              expression, faster translation rates, and higher yields.
             </p>
           </div>
         </div>
