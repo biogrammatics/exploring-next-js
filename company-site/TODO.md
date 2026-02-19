@@ -1,153 +1,163 @@
-# Rails to Next.js Migration Todo List
+# BioGrammatics Next.js - Project Status & Roadmap
 
-This document tracks features from the Rails BioGrammatics app that need to be implemented in the Next.js version.
-
----
-
-## HIGH PRIORITY - Core Business Features
-
-### 1. Protein Pathway (6-Step Service Configurator)
-- [ ] `/protein_pathway` - Landing/index page
-- [ ] Step-by-step guided experience (6 steps)
-- [ ] DIY vs. Service selection at each step
-- [ ] ServicePackage model and seed data
-- [ ] PathwaySelection model for tracking user choices
-- [ ] Dynamic pricing calculation
-- [ ] Review page showing all selections
-- [ ] Quote request form and submission
-- [ ] ServiceQuote model for quote tracking
-- [ ] Thank you page after submission
-
-### 2. Custom Projects System
-- [ ] Project creation form
-- [ ] Project listing page (user's projects)
-- [ ] Project detail/edit page
-- [ ] Project status tracking (pending, in_progress, completed, cancelled, awaiting_approval, sequence_approved)
-- [ ] Protein expression request form
-- [ ] Enhanced protein expression with FASTA upload (use existing fasta-parser.ts)
-- [ ] Amino acid sequence validation in forms (use existing amino-acid-validation.ts)
-- [ ] DNA sequence approval workflow
-- [ ] Vector selection interface
-- [ ] Protein tagging options (N-terminal, C-terminal)
-- [ ] Secretion signal selection
-
-### 3. Subscriptions UI
-- [ ] `/subscriptions` - Public subscriptions browse page
-- [ ] User subscription management page
-- [ ] Add vectors to subscription functionality
-- [ ] Prorated pricing calculations
-- [ ] Renewal date tracking and display
-- [ ] Subscription status display (pending, active, expired, cancelled)
-- [ ] Twist Bioscience username integration
+This document tracks the current state of the application and planned work.
 
 ---
 
-## MEDIUM PRIORITY - E-commerce Enhancements
+## SCHEMA ARCHITECTURE
 
-### 4. Multi-Step Checkout
-- [ ] Address step with validation
-- [ ] Payment step
-- [ ] Review step before confirmation
-- [ ] "Use billing address for shipping" checkbox
-- [ ] Prefill from user's saved addresses
-- [ ] Order summary with tax and shipping
+### Products: Vectors & Strains
 
-### 5. Session Cart for Guest Users
-- [ ] Session-based cart storage for unauthenticated users
-- [ ] Cart migration to user account on login
-- [ ] SessionCartService equivalent
+Vectors and strains are the core products — tangible goods that customers purchase, own, and receive with lot-specific QC documentation.
 
-### 6. Address Management
-- [ ] Saved addresses UI in account page
-- [ ] Add/edit/delete addresses
-- [ ] Set default billing/shipping addresses
-- [ ] Address type selection (billing/shipping)
+**Vector system (fully implemented in schema + admin UI):**
+- `Vector` — catalog product with pricing, taxonomy, availability, thumbnail
+- `VectorFile` — canonical files in S3 (SnapGene, GenBank, FASTA, product sheets, images)
+- `VectorLot` — manufacturing batch tracking (lot number, dates, current shipping lot)
+- `VectorLotFile` — lot-specific QC files (sequencing data, COA, QC reports)
+- `VectorOrderItem` — purchase tracking with `shippedLotId` for traceability
 
-### 7. Tax & Shipping Calculation
-- [ ] TaxCalculationService
-- [ ] ShippingCalculationService
-- [ ] Display calculated values in checkout
+**Strain system (schema complete, admin UI needed):**
+- `PichiaStrain` — catalog product with pricing, biological details, thumbnail
+- `StrainFile` — canonical files in S3 (images, datasheets, product sheets)
+- `StrainLot` — manufacturing batch tracking (mirrors VectorLot)
+- `StrainLotFile` — lot-specific QC files (reuses LotFileType enum)
+- `StrainOrderItem` — purchase tracking with `shippedLotId` for traceability
 
----
+Both products use the same patterns: S3 file storage, lot-based traceability, `currentShippingLotId` for active inventory, and `isPublic` for catalog visibility.
 
-## MEDIUM PRIORITY - Account & Admin Features
+### Customer Ownership
 
-### 8. Enhanced Account Dashboard
-- [ ] Active subscriptions display with vectors
-- [ ] Custom projects list
-- [ ] Saved addresses section
-- [ ] Better order history integration
-- [ ] Twist username field
+Customers "own" products through three paths:
+1. **Purchase** — `VectorOrderItem` or `StrainOrderItem` on a paid order, with lot traceability
+2. **Subscription** — `SubscriptionVector` for Twist Bioscience integrations (no lot — digital/licensing access)
+3. **Project output** — custom vectors/strains created by projects, invoiced as paid order line items
 
-### 9. Admin Reference Data Management
-- [ ] Promoters CRUD (`/admin/promoters`)
-- [ ] Selection Markers CRUD (`/admin/selection-markers`)
-- [ ] Host Organisms CRUD (`/admin/host-organisms`)
-- [ ] Vector Types CRUD (`/admin/vector-types`)
-- [ ] Strain Types CRUD (`/admin/strain-types`)
-- [ ] Product Statuses CRUD (`/admin/product-statuses`)
-- [ ] Secretion Signals CRUD (`/admin/secretion-signals`)
-- [ ] Protein Tags CRUD (`/admin/protein-tags`)
+### Project System (schema complete, UI needed)
 
-### 10. Vector/Strain File Management
-- [ ] SnapGene file upload for vectors
-- [ ] Vector map image upload
-- [ ] File removal functionality
-- [ ] Document attachments for strains
+Projects are work engagements where the company creates custom products for customers. The system supports:
 
----
+- **`Project`** — top-level engagement with status tracking (DRAFT → IN_PROGRESS → COMPLETED)
+- **`ProjectVector`** — many-to-many join with roles:
+  - `INPUT_OWNED` — customer's existing vector used as input
+  - `OUTPUT` — new vector being built for customer
+  - Tracks integration method (SwaI linearization, PCR, etc.)
+- **`ProjectStrain`** — many-to-many join with roles:
+  - `INPUT_RESOURCE` — company's host strain (BG10, GS115, etc.) used in transformation
+  - `OUTPUT` — new strain produced for customer
+- **`ProjectMilestone`** — progress tracking per product (visible to customer on dashboard)
+- **`ProjectOrder`** — links projects to invoices (supports deposits, milestone payments)
+- **`ProjectProtein`** — protein sequence tracking within projects
+- **`MilestoneTemplate`** — standard milestone sets auto-applied when products are added
 
-## LOWER PRIORITY - Security & Compliance
+**Customer dashboard lifecycle:**
+- Active project shows at top with milestone progress per product
+- Completed project products move to My Vectors / My Strains sections
+- Products sortable/filterable by project, date, etc.
 
-### 11. Policy Pages
-- [x] Cookie policy page (`/cookies`)
-- [x] Privacy policy page (`/privacy`)
-- [ ] Cookie consent banner/dialog
-- [ ] Cookie preference management
+### Legacy Models (to be removed after migration)
 
-### 12. Two-Factor Authentication
-- [ ] TOTP (Time-based One-Time Password) setup
-- [ ] SMS-based OTP via Twilio
-- [ ] Backup codes generation
-- [ ] 2FA verification on login
-- [ ] Required 2FA for admin users
-- [ ] Rate limiting on verification attempts
-
-### 13. Email Notifications
-- [ ] Password reset email
-- [ ] Order confirmation email
-- [ ] Quote request notification email
-- [ ] Project status update emails
-
-### 14. SMS Integration
-- [ ] Twilio service integration
-- [ ] SMS OTP delivery
-- [ ] Admin SMS testing tools
+- `CustomProject` / `Protein` — replaced by the new Project system
+- `Product` / `OrderItem` — generic legacy models, replaced by typed Vector/Strain order items
+- `Address` — defined but unused (checkout captures addresses inline on Order)
+- `ServicePackage` / `PathwaySelection` / `ServiceQuote` — planned service funnel, not yet implemented
 
 ---
 
 ## COMPLETED
 
-- [x] Prisma schema with biotech models (Vector, PichiaStrain, etc.)
-- [x] Seed data for reference tables
-- [x] Amino acid validation utility (`src/lib/amino-acid-validation.ts`)
-- [x] FASTA parser utility (`src/lib/fasta-parser.ts`)
-- [x] Vector catalog pages (`/vectors`, `/vectors/[id]`)
-- [x] Strain catalog pages (`/strains`, `/strains/[id]`)
-- [x] Admin vectors management (`/admin/vectors`)
-- [x] Admin strains management (`/admin/strains`)
+### Core Infrastructure
+- [x] PostgreSQL + Prisma schema with full biotech domain model
+- [x] NextAuth authentication with magic links
 - [x] User role system (USER, ADMIN, SUPER_ADMIN)
-- [x] Role management UI for Super Admins
-- [x] Basic checkout flow
-- [x] Shopping cart
-- [x] User authentication (NextAuth with magic links)
-- [x] Admin dashboard with metrics
+- [x] S3 file storage integration
+- [x] Stripe checkout integration
+- [x] ShipStation shipping rate integration
+
+### Vector Management (Admin)
+- [x] Vector CRUD with taxonomy relations
+- [x] Vector file upload to S3 (SnapGene, GenBank, FASTA, product sheets)
+- [x] Vector map image upload (1200x1200 PNG to S3 + 400x400 thumbnail to DB)
+- [x] Vector lot management (create, edit, set current shipping lot)
+- [x] Lot-specific QC file upload
+- [x] Vector visibility toggle (isPublic)
+- [x] Delete protection (can't delete vectors with orders/subscriptions/projects)
+
+### Strain Management (Admin)
+- [x] Strain CRUD with type/status relations
+- [x] Strain visibility toggle (isPublic)
+- [ ] Strain file upload (schema ready, UI needed — mirror vector pattern)
+- [ ] Strain lot management (schema ready, UI needed — mirror vector pattern)
+- [ ] Strain image/thumbnail upload (schema ready, UI needed)
+
+### Public Catalog
+- [x] Vector catalog page with category grouping
+- [x] Vector detail page with specs, downloads, add to cart
+- [x] Strain catalog page
+- [x] Strain detail page
+
+### E-Commerce
+- [x] Shopping cart (context-based, supports vectors + strains)
+- [x] Checkout with Stripe (creates VectorOrderItem records)
+- [x] Shipping address capture
+- [x] Shipping rate calculation (ShipStation)
+- [ ] StrainOrderItem creation in checkout (schema ready, code needed)
+- [ ] Auto-assign `shippedLotId` from `currentShippingLotId` at checkout
+
+### Customer Dashboard
+- [x] My Vectors (purchased vectors with order details)
+- [x] My Strains (purchased strains with order details)
+- [x] Vector detail with canonical files + lot QC files
+- [ ] Active project progress view (schema ready, UI needed)
+
+### Codon Optimization
+- [x] Web-based codon optimization tool
+- [x] Beam search optimizer for Pichia pastoris
+- [x] DP optimizer
+- [x] Restriction enzyme exclusion (vector-specific + Golden Gate)
+- [x] Async job processing with worker
+- [x] Email notification on completion
+
+### Admin Dashboard
+- [x] Overview metrics (vectors, strains, orders, users)
+- [x] Recent orders display
+- [x] User management with role assignment
+- [x] Contextual sidebar navigation (Manage Lots links on edit pages)
+
+### Security & Compliance
+- [x] Security documentation (SECURITY_README.md)
+- [x] Cookie policy page
+- [x] Privacy policy page
+- [x] Magic link authentication with rate limiting
+- [x] Team access (authorized emails per account)
 
 ---
 
-## Notes
+## NEXT UP
 
-- The Protein Pathway and Custom Projects features are core to BioGrammatics' business model
-- Existing utilities (amino-acid-validation.ts, fasta-parser.ts) can be reused
-- ServicePackage, PathwaySelection, and ServiceQuote models already exist in schema
-- Consider implementing features incrementally, starting with read-only views before full CRUD
+### Immediate (Schema-driven)
+- [ ] Strain admin UI parity — file upload, lot management, image upload (mirror vector admin)
+- [ ] Wire up `shippedLotId` in checkout (auto-assign `currentShippingLotId`)
+- [ ] Create `StrainOrderItem` records in checkout (currently only vectors get order items)
+- [ ] Unify file download route (`/api/files/[id]/download` for both public + dashboard)
+
+### Project System (New Feature)
+- [ ] Admin: Project CRUD (create, list, edit projects)
+- [ ] Admin: Add/remove vectors and strains to projects with roles
+- [ ] Admin: Milestone management (create from templates, update status)
+- [ ] Admin: Link orders/invoices to projects
+- [ ] Customer: Active project progress view on dashboard
+- [ ] Customer: Completed project products in My Vectors / My Strains
+- [ ] Seed milestone templates (Custom Vector Build, Strain Generation)
+
+### Subscription System
+- [ ] Subscription management UI
+- [ ] Add vectors to subscription
+- [ ] Twist Bioscience username integration
+- [ ] Customer dashboard subscription view
+
+### Additional
+- [ ] Admin reference data CRUD (promoters, selection markers, host organisms, etc.)
+- [ ] Order management improvements (admin fulfillment workflow)
+- [ ] Email notifications (order confirmation, project status updates)
+- [ ] Cookie consent banner

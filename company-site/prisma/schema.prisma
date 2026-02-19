@@ -52,8 +52,11 @@ model User {
   // Subscription relations
   subscriptions Subscription[]
 
-  // Custom project relations
+  // Custom project relations (legacy)
   customProjects CustomProject[]
+
+  // Project system relations
+  projects Project[]
 
   // Service pathway relations
   pathwaySelections PathwaySelection[]
@@ -349,11 +352,19 @@ enum VectorFileType {
   OTHER
 }
 
-// File types for lot-specific QC files
+// File types for lot-specific QC files (shared by VectorLotFile and StrainLotFile)
 enum LotFileType {
   SEQUENCING_DATA  // Chromatograms, .ab1 files
   QC_REPORT        // Quality control report
   COA              // Certificate of Analysis
+  OTHER
+}
+
+// File types for canonical strain files
+enum StrainFileType {
+  IMAGE          // Strain images (plates, microscopy)
+  PRODUCT_SHEET  // PDF documentation
+  DATASHEET      // Technical datasheet
   OTHER
 }
 
@@ -377,7 +388,7 @@ model Vector {
   vectorSize  Int? // Base pairs
   features    String?
 
-  // Thumbnail image (400x400 WebP, base64 encoded for fast catalog loading)
+  // Thumbnail image (base64 encoded PNG for fast catalog loading)
   thumbnailBase64 String? @db.Text
 
   // Relations to taxonomy
@@ -408,6 +419,10 @@ model Vector {
   subscriptionVectors SubscriptionVector[]
   customProjects      CustomProject[]
   vectorOrderItems    VectorOrderItem[]
+
+  // Project system relations
+  projectVectors    ProjectVector[]
+  projectMilestones ProjectMilestone[]
 
   @@index([category])
   @@index([availableForSale])
@@ -483,6 +498,72 @@ model VectorLotFile {
   @@index([lotId, fileType])
 }
 
+// Canonical files for a strain (images, datasheets, product sheets)
+model StrainFile {
+  id       String          @id @default(cuid())
+  strainId String
+  strain   PichiaStrain    @relation(fields: [strainId], references: [id], onDelete: Cascade)
+
+  fileType    StrainFileType
+  fileName    String
+  fileSize    Int?    // bytes
+  s3Key       String  // AWS S3 object key
+  s3Bucket    String? // optional if using single bucket
+  contentType String? // MIME type
+
+  isPrimary Boolean @default(false) // Primary file of this type
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([strainId])
+  @@index([strainId, fileType])
+}
+
+// Lot tracking for strains (for traceability and QC)
+model StrainLot {
+  id       String       @id @default(cuid())
+  strainId String
+  strain   PichiaStrain @relation(fields: [strainId], references: [id], onDelete: Cascade)
+
+  lotNumber      String    // e.g., "SLOT-2026-001"
+  manufacturedAt DateTime?
+  expiresAt      DateTime?
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  files StrainLotFile[]
+
+  // Reverse relations
+  currentForStrains PichiaStrain[]    @relation("CurrentShippingStrainLot")
+  shippedOrderItems StrainOrderItem[]
+
+  @@unique([strainId, lotNumber])
+  @@index([strainId])
+  @@index([lotNumber])
+}
+
+// QC and sequencing files for specific strain lots
+model StrainLotFile {
+  id    String    @id @default(cuid())
+  lotId String
+  lot   StrainLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+
+  fileType    LotFileType  // Reuses shared lot file type enum
+  fileName    String
+  fileSize    Int?    // bytes
+  s3Key       String  // AWS S3 object key
+  s3Bucket    String? // optional if using single bucket
+  contentType String? // MIME type
+
+  createdAt DateTime @default(now())
+
+  @@index([lotId])
+  @@index([lotId, fileType])
+}
+
 model PichiaStrain {
   id          String  @id @default(cuid())
   name        String  @unique
@@ -506,9 +587,12 @@ model PichiaStrain {
   growthConditions    String?
   citations           String?
 
-  // File storage
+  // File storage (legacy — replaced by StrainFile relation)
   hasFiles  Boolean @default(false)
   fileNotes String?
+
+  // Thumbnail image (base64 encoded PNG for fast catalog loading)
+  thumbnailBase64 String? @db.Text
 
   // Visibility
   isPublic Boolean @default(true) // Whether visible in public catalog
@@ -517,14 +601,26 @@ model PichiaStrain {
   strainTypeId    String?
   productStatusId String
 
+  // Current shipping lot (updated when lot changes)
+  currentShippingLotId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   strainType    StrainType?   @relation(fields: [strainTypeId], references: [id])
   productStatus ProductStatus @relation(fields: [productStatusId], references: [id])
 
+  // File and lot relations
+  files              StrainFile[]
+  lots               StrainLot[]
+  currentShippingLot StrainLot?   @relation("CurrentShippingStrainLot", fields: [currentShippingLotId], references: [id])
+
   // Reverse relations
   strainOrderItems StrainOrderItem[]
+
+  // Project system relations
+  projectStrains    ProjectStrain[]
+  projectMilestones ProjectMilestone[]
 
   @@index([name])
   @@index([availability])
@@ -594,6 +690,9 @@ model Order {
   vectorOrderItems VectorOrderItem[]
   strainOrderItems StrainOrderItem[]
 
+  // Project system relations
+  projectOrders ProjectOrder[]
+
   @@index([userId])
   @@index([customerEmail])
   @@index([orderNumber])
@@ -646,8 +745,13 @@ model StrainOrderItem {
   strainId String
   strain   PichiaStrain @relation(fields: [strainId], references: [id])
 
+  // Lot shipped for this order (for traceability)
+  shippedLotId String?
+  shippedLot   StrainLot? @relation(fields: [shippedLotId], references: [id])
+
   @@index([orderId])
   @@index([strainId])
+  @@index([shippedLotId])
 }
 
 // ============================================================================
@@ -811,6 +915,207 @@ model Protein {
 
   @@index([customProjectId])
   @@index([customProjectId, sequenceOrder])
+}
+
+// ============================================================================
+// PROJECT SYSTEM (Replaces CustomProject)
+// ============================================================================
+
+enum ProjectStatus2 {
+  DRAFT          // Being configured by admin
+  PENDING        // Awaiting customer approval/payment
+  IN_PROGRESS    // Active work
+  ON_HOLD        // Paused
+  COMPLETED      // All work done, products shipped
+  CANCELLED
+}
+
+enum ProjectVectorRole {
+  INPUT_OWNED   // Customer's existing vector used as input
+  OUTPUT        // New vector being built for customer
+}
+
+enum ProjectStrainRole {
+  INPUT_RESOURCE  // Company's host strain (e.g., BG10)
+  OUTPUT          // New strain produced for customer
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+// The top-level work engagement between the company and a customer
+model Project {
+  id          String          @id @default(cuid())
+  projectName String
+  description String?         @db.Text
+  status      ProjectStatus2  @default(DRAFT)
+  notes       String?         @db.Text
+
+  // Cost estimation (in cents)
+  estimatedCost           Int?
+  estimatedCompletionDate DateTime?
+
+  // Delivery options
+  deliveryFormat DeliveryFormat @default(PLATE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Owner
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Relations
+  projectVectors    ProjectVector[]
+  projectStrains    ProjectStrain[]
+  projectMilestones ProjectMilestone[]
+  projectOrders     ProjectOrder[]
+  projectProteins   ProjectProtein[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([userId, status])
+}
+
+// Many-to-many join: which vectors are involved in the project, and in what role
+model ProjectVector {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vectorId  String
+  vector    Vector  @relation(fields: [vectorId], references: [id])
+
+  role              ProjectVectorRole
+  integrationMethod String?  // Free text: "SwaI linearization", "PCR amplification", etc.
+  notes             String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, vectorId, role])
+  @@index([projectId])
+  @@index([vectorId])
+}
+
+// Many-to-many join: which strains are involved in the project, and in what role
+model ProjectStrain {
+  id        String       @id @default(cuid())
+  projectId String
+  project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  strainId  String
+  strain    PichiaStrain @relation(fields: [strainId], references: [id])
+
+  role  ProjectStrainRole
+  notes String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, strainId, role])
+  @@index([projectId])
+  @@index([strainId])
+}
+
+// Progress tracking per product within a project
+model ProjectMilestone {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // The product this milestone relates to (both null = general project milestone)
+  vectorId String?
+  vector   Vector?       @relation(fields: [vectorId], references: [id])
+  strainId String?
+  strain   PichiaStrain? @relation(fields: [strainId], references: [id])
+
+  name      String          // e.g., "Synthesis complete", "Electroporation done"
+  status    MilestoneStatus @default(PENDING)
+  sortOrder Int             @default(0)
+  notes     String?         @db.Text
+
+  completedAt DateTime?
+  completedBy String?   // Admin user ID who marked it complete
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([projectId, sortOrder])
+  @@index([vectorId])
+  @@index([strainId])
+}
+
+// Links a project to orders/invoices (many-to-many)
+model ProjectOrder {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id])
+
+  notes String? // e.g., "Deposit", "Final invoice"
+
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, orderId])
+  @@index([projectId])
+  @@index([orderId])
+}
+
+// Protein tracking within a project (replaces Protein -> CustomProject)
+model ProjectProtein {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+
+  // Sequence data
+  aminoAcidSequence String  @db.Text
+  originalSequence  String? @db.Text
+  dnaSequence       String? @db.Text
+
+  // Modifications
+  secretionSignal String?
+  nTerminalTag    String?
+  cTerminalTag    String?
+
+  // Calculated
+  molecularWeight Float?
+  sequenceOrder   Int    @default(1)
+
+  // Approval tracking
+  dnaSequenceApproved    Boolean @default(false)
+  codonOptimizationNotes String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([projectId, sequenceOrder])
+}
+
+// Standard milestone templates auto-applied when products are added to a project
+model MilestoneTemplate {
+  id           String  @id @default(cuid())
+  templateName String  // e.g., "Custom Vector Build", "Strain Generation"
+  productType  String  // "VECTOR" or "STRAIN"
+
+  milestoneName String  // The milestone step name
+  sortOrder     Int     @default(0)
+  isActive      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([templateName, milestoneName])
+  @@index([templateName])
+  @@index([isActive])
 }
 
 // ============================================================================
