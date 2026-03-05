@@ -341,8 +341,11 @@ export default function PrivacyPolicyPage() {
 
           {/* Links */}
           <div className="flex flex-wrap gap-4 pt-4 border-t">
+            <Link href="/terms" className="text-blue-600 hover:underline">
+              Terms and Conditions
+            </Link>
             <Link href="/cookies" className="text-blue-600 hover:underline">
-              View Cookie Policy
+              Cookie Policy
             </Link>
           </div>
         </div>

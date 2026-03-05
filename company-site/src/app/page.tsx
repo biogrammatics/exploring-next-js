@@ -220,6 +220,9 @@ export default function Home() {
                 <Link href="/privacy" className="text-gray-600 hover:text-gray-800">
                   Privacy Policy
                 </Link>
+                <Link href="/terms" className="text-gray-600 hover:text-gray-800">
+                  Terms &amp; Conditions
+                </Link>
                 <Link href="/cookies" className="text-gray-600 hover:text-gray-800">
                   Cookie Policy
                 </Link>
