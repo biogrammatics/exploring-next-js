@@ -24,16 +24,25 @@ function userPath(path: string): string {
   return `${TWIST_API_BASE_URL}/v1/users/${TWIST_API_EMAIL}${path}`;
 }
 
+async function parseResponse(res: Response) {
+  const text = await res.text();
+  try {
+    return { status: res.status, data: JSON.parse(text) };
+  } catch {
+    return { status: res.status, data: { rawBody: text || "(empty response)" } };
+  }
+}
+
 /** Step 0: Test connectivity — GET user profile */
 export async function testConnection() {
   const res = await fetch(userPath("/"), { headers: getHeaders() });
-  return { status: res.status, data: await res.json() };
+  return parseResponse(res);
 }
 
 /** Step 1: Get available vectors and insertion points */
 export async function getVectors() {
   const res = await fetch(userPath("/vectors/"), { headers: getHeaders() });
-  return { status: res.status, data: await res.json() };
+  return parseResponse(res);
 }
 
 /** Step 2: Create a construct for scoring */
@@ -52,7 +61,7 @@ export async function createConstruct(body: {
       ...body,
     }),
   });
-  return { status: res.status, data: await res.json() };
+  return parseResponse(res);
 }
 
 /** Step 3: Score/describe a construct by ID */
@@ -61,5 +70,5 @@ export async function describeConstruct(constructId: string) {
     userPath(`/constructs/describe/?id__in=${constructId}`),
     { headers: getHeaders() }
   );
-  return { status: res.status, data: await res.json() };
+  return parseResponse(res);
 }
