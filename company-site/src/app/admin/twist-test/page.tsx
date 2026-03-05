@@ -19,44 +19,60 @@ export default function TwistTestPage() {
   const [constructName, setConstructName] = useState("TEST_Clonal");
   const [constructId, setConstructId] = useState("");
 
-  async function runTest(key: string, fn: () => Promise<Response>) {
+  async function runStep(key: string, fn: () => Promise<ApiResult>) {
     setLoading(key);
     try {
-      const res = await fn();
-      const data = await res.json();
-      setResults((prev) => ({ ...prev, [key]: data }));
+      const result = await fn();
+      setResults((prev) => ({ ...prev, [key]: result }));
+      return result;
     } catch (err) {
-      setResults((prev) => ({
-        ...prev,
-        [key]: { status: 0, data: { error: String(err) } },
-      }));
+      const errResult: ApiResult = {
+        status: 0,
+        data: { error: String(err) },
+      };
+      setResults((prev) => ({ ...prev, [key]: errResult }));
+      return errResult;
     } finally {
       setLoading(null);
     }
   }
 
   const testConnection = () =>
-    runTest("connection", () => fetch("/api/twist/test"));
+    runStep("connection", async () => {
+      const res = await fetch("/api/twist/test");
+      return res.json();
+    });
 
   const fetchVectors = () =>
-    runTest("vectors", async () => {
+    runStep("vectors", async () => {
       const res = await fetch("/api/twist/vectors");
-      const data = await res.json();
+      const data: ApiResult = await res.json();
       // Auto-populate first vector's UIDs if available
-      if (data?.data?.results?.length > 0) {
-        const v = data.data.results[0];
-        setVectorMesUid(v.mes_uid || "");
-        if (v.insertion_points?.length > 0) {
-          setInsertionPointMesUid(v.insertion_points[0].mes_uid || "");
+      if (
+        data?.data &&
+        typeof data.data === "object" &&
+        "results" in data.data
+      ) {
+        const results = (data.data as { results: Record<string, unknown>[] })
+          .results;
+        if (results?.length > 0) {
+          const v = results[0];
+          setVectorMesUid((v.mes_uid as string) || "");
+          const insertionPoints = v.insertion_points as
+            | Record<string, unknown>[]
+            | undefined;
+          if (insertionPoints?.length) {
+            setInsertionPointMesUid(
+              (insertionPoints[0].mes_uid as string) || ""
+            );
+          }
         }
       }
-      // Return a fake Response so runTest can parse it — but we already set results
-      setResults((prev) => ({ ...prev, vectors: data }));
-      return new Response(); // won't be used since we set results above
+      return data;
     });
 
   const createConstruct = () =>
-    runTest("construct", async () => {
+    runStep("construct", async () => {
       const res = await fetch("/api/twist/constructs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -67,19 +83,29 @@ export default function TwistTestPage() {
           insertion_point_mes_uid: insertionPointMesUid,
         }),
       });
-      const data = await res.json();
+      const data: ApiResult = await res.json();
       // Auto-populate construct ID from response
-      if (data?.data?.results?.length > 0) {
-        setConstructId(String(data.data.results[0].id || ""));
+      if (
+        data?.data &&
+        typeof data.data === "object" &&
+        "results" in data.data
+      ) {
+        const results = (data.data as { results: Record<string, unknown>[] })
+          .results;
+        if (results?.length > 0) {
+          setConstructId(String(results[0].id || ""));
+        }
       }
-      setResults((prev) => ({ ...prev, construct: data }));
-      return new Response();
+      return data;
     });
 
   const scoreConstruct = () =>
-    runTest("score", () =>
-      fetch(`/api/twist/constructs/describe?id=${constructId}`)
-    );
+    runStep("score", async () => {
+      const res = await fetch(
+        `/api/twist/constructs/describe?id=${constructId}`
+      );
+      return res.json();
+    });
 
   return (
     <div>
