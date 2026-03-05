@@ -58,6 +58,7 @@ export async function createConstruct(body: {
     headers: getHeaders(),
     body: JSON.stringify({
       type: "CLONED_GENE",
+      adapters_on: false,
       ...body,
     }),
   });
