@@ -152,7 +152,7 @@ export async function createConstruct(body: {
 /** Step 3: Score/describe a construct by ID */
 export async function describeConstruct(constructId: string) {
   const res = await fetch(
-    userPath(`/constructs/describe/?id__in=${constructId}`),
+    userPath(`/constructs/describe/?id__in=${encodeURIComponent(constructId)}`),
     { headers: getHeaders() }
   );
   return parseResponse(res);

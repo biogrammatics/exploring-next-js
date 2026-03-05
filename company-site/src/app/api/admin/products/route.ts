@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { createProductSchema, formatZodError } from "@/lib/validations";
 
 export async function GET() {
   const session = await auth();
@@ -27,16 +28,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  const data = await request.json();
+  const raw = await request.json();
+  const parsed = createProductSchema.safeParse(raw);
+
+  if (!parsed.success) {
+    return NextResponse.json(formatZodError(parsed.error), { status: 400 });
+  }
 
   const product = await prisma.product.create({
-    data: {
-      name: data.name,
-      description: data.description,
-      price: data.price,
-      imageUrl: data.imageUrl,
-      active: data.active ?? true,
-    },
+    data: parsed.data,
   });
 
   return NextResponse.json(product, { status: 201 });

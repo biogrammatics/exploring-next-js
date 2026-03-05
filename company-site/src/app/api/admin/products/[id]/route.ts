@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { updateProductSchema, formatZodError } from "@/lib/validations";
 
 export async function GET(
   request: NextRequest,
@@ -39,17 +40,16 @@ export async function PUT(
   }
 
   const { id } = await params;
-  const data = await request.json();
+  const raw = await request.json();
+  const parsed = updateProductSchema.safeParse(raw);
+
+  if (!parsed.success) {
+    return NextResponse.json(formatZodError(parsed.error), { status: 400 });
+  }
 
   const product = await prisma.product.update({
     where: { id },
-    data: {
-      name: data.name,
-      description: data.description,
-      price: data.price,
-      imageUrl: data.imageUrl,
-      active: data.active,
-    },
+    data: parsed.data,
   });
 
   return NextResponse.json(product);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { updateProfileSchema, formatZodError } from "@/lib/validations";
 
 export async function GET() {
   const session = await auth();
@@ -36,20 +37,16 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const data = await request.json();
+  const raw = await request.json();
+  const parsed = updateProfileSchema.safeParse(raw);
+
+  if (!parsed.success) {
+    return NextResponse.json(formatZodError(parsed.error), { status: 400 });
+  }
 
   const user = await prisma.user.update({
     where: { id: session.user.id },
-    data: {
-      name: data.name,
-      phone: data.phone,
-      address1: data.address1,
-      address2: data.address2,
-      city: data.city,
-      state: data.state,
-      zip: data.zip,
-      country: data.country,
-    },
+    data: parsed.data,
   });
 
   return NextResponse.json(user);
