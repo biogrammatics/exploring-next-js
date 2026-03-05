@@ -13,6 +13,7 @@ const SAMPLE_SEQUENCE =
 export default function TwistTestPage() {
   const [loading, setLoading] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, ApiResult | null>>({});
+  const [constructMode, setConstructMode] = useState<"CLONED_GENE" | "NON_CLONED_GENE">("CLONED_GENE");
   const [vectorMesUid, setVectorMesUid] = useState("");
   const [insertionPointMesUid, setInsertionPointMesUid] = useState("");
   const [sequence, setSequence] = useState(SAMPLE_SEQUENCE);
@@ -73,15 +74,19 @@ export default function TwistTestPage() {
 
   const createConstruct = () =>
     runStep("construct", async () => {
+      const payload: Record<string, unknown> = {
+        sequences: [sequence.trim()],
+        name: constructName,
+        type: constructMode,
+      };
+      if (constructMode === "CLONED_GENE") {
+        payload.vector_mes_uid = vectorMesUid;
+        payload.insertion_point_mes_uid = insertionPointMesUid;
+      }
       const res = await fetch("/api/twist/constructs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sequences: [sequence],
-          name: constructName,
-          vector_mes_uid: vectorMesUid,
-          insertion_point_mes_uid: insertionPointMesUid,
-        }),
+        body: JSON.stringify(payload),
       });
       const data: ApiResult = await res.json();
       // Auto-populate construct ID from response
@@ -150,35 +155,56 @@ export default function TwistTestPage() {
         {/* Step 2: Create Construct */}
         <Section title="Step 2: Create Construct" step="2">
           <p className="text-sm text-gray-600 mb-4">
-            Submit a DNA sequence as a cloned gene construct for scoring.
+            Submit a DNA sequence for scoring — as a cloned gene (into vector) or as a standalone fragment.
           </p>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Vector MES UID
-                </label>
-                <input
-                  type="text"
-                  value={vectorMesUid}
-                  onChange={(e) => setVectorMesUid(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 font-mono text-sm"
-                  placeholder="OI_59529ab1f9aecd6d6574f2f8"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Insertion Point MES UID
-                </label>
-                <input
-                  type="text"
-                  value={insertionPointMesUid}
-                  onChange={(e) => setInsertionPointMesUid(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 font-mono text-sm"
-                  placeholder="494e5353-59ee-2d8b-810a-d3c87d51e2f5"
-                />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Construct Type
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConstructMode("CLONED_GENE")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium border ${constructMode === "CLONED_GENE" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"}`}
+                >
+                  Cloned Gene (into vector)
+                </button>
+                <button
+                  onClick={() => setConstructMode("NON_CLONED_GENE")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium border ${constructMode === "NON_CLONED_GENE" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"}`}
+                >
+                  Fragment (no vector)
+                </button>
               </div>
             </div>
+            {constructMode === "CLONED_GENE" && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Vector MES UID
+                  </label>
+                  <input
+                    type="text"
+                    value={vectorMesUid}
+                    onChange={(e) => setVectorMesUid(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 font-mono text-sm"
+                    placeholder="OI_59529ab1f9aecd6d6574f2f8"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Insertion Point MES UID
+                  </label>
+                  <input
+                    type="text"
+                    value={insertionPointMesUid}
+                    onChange={(e) => setInsertionPointMesUid(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 font-mono text-sm"
+                    placeholder="494e5353-59ee-2d8b-810a-d3c87d51e2f5"
+                  />
+                </div>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Construct Name
@@ -207,11 +233,11 @@ export default function TwistTestPage() {
             <button
               onClick={createConstruct}
               disabled={
-                loading !== null || !vectorMesUid || !insertionPointMesUid
+                loading !== null || (constructMode === "CLONED_GENE" && (!vectorMesUid || !insertionPointMesUid))
               }
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
-              {loading === "construct" ? "Creating..." : "Create Construct"}
+              {loading === "construct" ? "Creating..." : constructMode === "CLONED_GENE" ? "Create Cloned Construct" : "Create Fragment"}
             </button>
           </div>
           <ResultDisplay result={results.construct} />
