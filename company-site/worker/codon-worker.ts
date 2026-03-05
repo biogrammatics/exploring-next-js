@@ -28,6 +28,12 @@ import {
   type OptimizationResult,
 } from "../src/lib/beam-search-optimizer";
 
+// Twist API for synthesizability scoring
+import {
+  createFragmentConstruct,
+  describeConstruct,
+} from "../src/lib/twist";
+
 
 // Initialize clients
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
@@ -349,6 +355,91 @@ Protein Expression Experts
 }
 
 // ============================================================================
+// TWIST SYNTHESIZABILITY SCORING
+// ============================================================================
+
+/**
+ * Score a DNA sequence on Twist Bioscience for synthesizability.
+ * Appends a TAA stop codon before submitting (Twist expects complete ORFs).
+ * Returns null fields if Twist API is unavailable — non-fatal.
+ */
+async function scoreTwist(
+  dnaSequence: string,
+  jobId: string,
+  proteinName: string | null
+): Promise<{
+  twistScore: string | null;
+  twistDifficulty: string | null;
+  twistErrors: string | null;
+}> {
+  try {
+    // Append TAA stop codon for Twist scoring
+    const sequenceWithStop = dnaSequence + "TAA";
+    const constructName = proteinName || `opt_${jobId.slice(-8)}`;
+
+    console.log(
+      `[${new Date().toISOString()}] Scoring job ${jobId} on Twist (${sequenceWithStop.length}bp with stop codon)`
+    );
+
+    // Create a fragment construct (no vector needed)
+    const createResult = await createFragmentConstruct({
+      sequences: [sequenceWithStop],
+      name: constructName,
+    });
+
+    if (createResult.status < 200 || createResult.status >= 300) {
+      console.log(
+        `[${new Date().toISOString()}] Twist construct creation failed for job ${jobId}: HTTP ${createResult.status}`
+      );
+      return { twistScore: null, twistDifficulty: null, twistErrors: null };
+    }
+
+    const results = createResult.data?.results;
+    const constructId = results?.[0]?.id;
+    if (!constructId) {
+      console.log(
+        `[${new Date().toISOString()}] No construct ID returned from Twist for job ${jobId}`
+      );
+      return { twistScore: null, twistDifficulty: null, twistErrors: null };
+    }
+
+    // Brief pause to let Twist process the construct
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    // Score the construct
+    const scoreResult = await describeConstruct(String(constructId));
+
+    if (scoreResult.status < 200 || scoreResult.status >= 300) {
+      console.log(
+        `[${new Date().toISOString()}] Twist scoring failed for job ${jobId}: HTTP ${scoreResult.status}`
+      );
+      return { twistScore: null, twistDifficulty: null, twistErrors: null };
+    }
+
+    const scored = scoreResult.data?.results?.[0];
+    const twistScore = scored?.score || null;
+    const twistDifficulty = scored?.score_data?.difficulty || null;
+    const issues = scored?.score_data?.issues || [];
+
+    console.log(
+      `[${new Date().toISOString()}] Twist score for job ${jobId}: ${twistScore} (${twistDifficulty}), ${issues.length} issue(s)`
+    );
+
+    return {
+      twistScore,
+      twistDifficulty,
+      twistErrors: issues.length > 0 ? JSON.stringify(issues) : null,
+    };
+  } catch (err) {
+    console.log(
+      `[${new Date().toISOString()}] Twist scoring error for job ${jobId}:`,
+      err instanceof Error ? err.message : err
+    );
+    return { twistScore: null, twistDifficulty: null, twistErrors: null };
+  }
+}
+
+// ============================================================================
 // WORKER LOGIC
 // ============================================================================
 
@@ -383,12 +474,22 @@ async function processJob(jobId: string): Promise<void> {
     );
 
     if (result.success && result.dnaSequence) {
+      // Score on Twist for synthesizability (non-fatal if Twist is unavailable)
+      const { twistScore, twistDifficulty, twistErrors } = await scoreTwist(
+        result.dnaSequence,
+        jobId,
+        job.proteinName
+      );
+
       // Update job with results
       await prisma.codonOptimizationJob.update({
         where: { id: jobId },
         data: {
           status: "COMPLETED",
           dnaSequence: result.dnaSequence,
+          twistScore,
+          twistDifficulty,
+          twistErrors,
           completedAt: new Date(),
         },
       });

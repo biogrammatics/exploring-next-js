@@ -1266,6 +1266,11 @@ model CodonOptimizationJob {
   dnaSequence       String?  @db.Text
   errorMessage      String?
 
+  // Twist synthesizability scoring
+  twistScore        String?  // "BUILDABLE" or "UNBUILDABLE"
+  twistDifficulty   String?  // "STANDARD", "COMPLEX", or "NOT ACCEPTED"
+  twistErrors       String?  @db.Text  // JSON array of Twist issue objects
+
   // Timing
   startedAt         DateTime?
   completedAt       DateTime?

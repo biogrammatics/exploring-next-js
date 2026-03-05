@@ -10,6 +10,9 @@ interface JobStatus {
   targetOrganism: string;
   dnaSequence: string | null;
   errorMessage: string | null;
+  twistScore: string | null;
+  twistDifficulty: string | null;
+  twistErrors: string | null;
   vectorName: string | null;
   goldenGateExclusion: boolean;
   excludedEnzymeNames: string | null;
@@ -290,6 +293,53 @@ export default function CodonOptimizationPage() {
                         {jobStatus.stats.gcContent}%
                       </div>
                       <div className="text-sm text-gray-600">GC Content</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Twist Synthesizability Score */}
+                {jobStatus.twistDifficulty && (
+                  <div
+                    className={`p-4 rounded-lg mb-6 border ${
+                      jobStatus.twistDifficulty === "STANDARD"
+                        ? "bg-green-50 border-green-200"
+                        : jobStatus.twistDifficulty === "COMPLEX"
+                        ? "bg-yellow-50 border-yellow-200"
+                        : "bg-red-50 border-red-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700">
+                          Twist Synthesizability
+                        </h4>
+                        <p
+                          className={`text-lg font-semibold ${
+                            jobStatus.twistDifficulty === "STANDARD"
+                              ? "text-green-800"
+                              : jobStatus.twistDifficulty === "COMPLEX"
+                              ? "text-yellow-800"
+                              : "text-red-800"
+                          }`}
+                        >
+                          {jobStatus.twistDifficulty === "STANDARD"
+                            ? "Standard — ready to order"
+                            : jobStatus.twistDifficulty === "COMPLEX"
+                            ? "Complex — synthesizable with additional cost"
+                            : "Not Accepted — sequence modifications needed"}
+                        </p>
+                      </div>
+                      <span
+                        className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          jobStatus.twistDifficulty === "STANDARD"
+                            ? "bg-green-100 text-green-800"
+                            : jobStatus.twistDifficulty === "COMPLEX"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {jobStatus.twistDifficulty}
+                      </span>
                     </div>
                   </div>
                 )}
