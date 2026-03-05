@@ -112,7 +112,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    if (
+      !session?.user ||
+      !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")
+    ) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

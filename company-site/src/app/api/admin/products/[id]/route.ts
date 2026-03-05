@@ -7,7 +7,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  if (!session || session.user.role !== "ADMIN") {
+  if (
+    !session?.user ||
+    !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")
+  ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
@@ -28,7 +31,10 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  if (!session || session.user.role !== "ADMIN") {
+  if (
+    !session?.user ||
+    !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")
+  ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
@@ -54,7 +60,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
-  if (!session || session.user.role !== "ADMIN") {
+  if (
+    !session?.user ||
+    !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")
+  ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 

@@ -4,7 +4,10 @@ import { prisma } from "@/lib/db";
 
 export async function GET() {
   const session = await auth();
-  if (!session || session.user.role !== "ADMIN") {
+  if (
+    !session?.user ||
+    !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")
+  ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
@@ -17,7 +20,10 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const session = await auth();
-  if (!session || session.user.role !== "ADMIN") {
+  if (
+    !session?.user ||
+    !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")
+  ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
