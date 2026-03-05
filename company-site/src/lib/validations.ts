@@ -54,6 +54,33 @@ export const createConstructSchema = z.discriminatedUnion("type", [
   createFragmentConstructSchema,
 ]);
 
+// ── SMS / 2FA schemas ───────────────────────────────────────────────
+
+/** Phone number: digits, spaces, dashes, parens, optional + prefix */
+const phoneNumber = z
+  .string()
+  .min(1, "Phone number is required")
+  .max(20)
+  .regex(/^\+?[\d\s\-()]+$/, "Invalid phone number format");
+
+export const sendTestSmsSchema = z.object({
+  phone: phoneNumber,
+  message: z.string().min(1, "Message is required").max(1600, "SMS messages cannot exceed 1600 characters"),
+});
+
+export const verifyOtpSchema = z.object({
+  token: z.string().min(1, "Token is required"),
+  code: z.string().length(6, "Code must be 6 digits").regex(/^\d{6}$/, "Code must be 6 digits"),
+});
+
+export const phoneSetupSchema = z.object({
+  phone: phoneNumber,
+});
+
+export const resendCodeSchema = z.object({
+  token: z.string().min(1, "Token is required"),
+});
+
 // ── Utility: format Zod errors for API responses ────────────────────
 
 export function formatZodError(error: z.ZodError<unknown>) {

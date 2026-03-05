@@ -16,6 +16,8 @@ export function AdminSidebar({ isSuperAdmin }: AdminSidebarProps) {
     { href: "/admin/strains", label: "Strains" },
     { href: "/admin/orders", label: "Orders" },
     { href: "/admin/users", label: "Users" },
+    { href: "/admin/twist-test", label: "Twist API" },
+    { href: "/admin/twilio-test", label: "Twilio SMS" },
   ];
 
   // Check if we're editing a vector or strain
