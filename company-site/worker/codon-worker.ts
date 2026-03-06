@@ -30,9 +30,13 @@ import {
 
 // Twist API for synthesizability scoring
 import {
-  createFragmentConstruct,
+  createClonedConstruct,
   describeConstruct,
 } from "../src/lib/twist";
+
+// pTwist PIC9 vector — hardcoded for Twist scoring
+const TWIST_VECTOR_MES_UID = "VEC_68a4e99691216c000a3739e7";
+const TWIST_INSERTION_POINT_MES_UID = "494e5353-68a4-e9b2-9121-6c000a3739ee";
 
 
 // Initialize clients
@@ -381,10 +385,12 @@ async function scoreTwist(
       `[${new Date().toISOString()}] Scoring job ${jobId} on Twist (${sequenceWithStop.length}bp with stop codon)`
     );
 
-    // Create a fragment construct (no vector needed)
-    const createResult = await createFragmentConstruct({
+    // Create a cloned gene construct into pTwist PIC9 vector
+    const createResult = await createClonedConstruct({
       sequences: [sequenceWithStop],
       name: constructName,
+      vector_mes_uid: TWIST_VECTOR_MES_UID,
+      insertion_point_mes_uid: TWIST_INSERTION_POINT_MES_UID,
     });
 
     if (createResult.status < 200 || createResult.status >= 300) {
