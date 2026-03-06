@@ -394,25 +394,29 @@ async function scoreTwist(
       return { twistScore: null, twistDifficulty: null, twistErrors: null };
     }
 
-    // Debug: log the full Twist response to determine structure
-    console.log(
-      `[${new Date().toISOString()}] Twist create response for job ${jobId}: ${JSON.stringify(createResult.data).slice(0, 1000)}`
-    );
-
-    const results = createResult.data?.results;
-    const constructId = results?.[0]?.id;
+    // Twist returns a single object, not a results array
+    const constructId = createResult.data?.id;
     if (!constructId) {
       console.log(
-        `[${new Date().toISOString()}] No construct ID returned from Twist for job ${jobId}`
+        `[${new Date().toISOString()}] No construct ID returned from Twist for job ${jobId}: ${JSON.stringify(createResult.data).slice(0, 500)}`
       );
       return { twistScore: null, twistDifficulty: null, twistErrors: null };
     }
 
+    console.log(
+      `[${new Date().toISOString()}] Twist construct created for job ${jobId}: ${constructId}`
+    );
+
     // Brief pause to let Twist process the construct
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
     // Score the construct
     const scoreResult = await describeConstruct(String(constructId));
+
+    // Debug: log the score response
+    console.log(
+      `[${new Date().toISOString()}] Twist describe response for job ${jobId}: ${JSON.stringify(scoreResult.data).slice(0, 1000)}`
+    );
 
     if (scoreResult.status < 200 || scoreResult.status >= 300) {
       console.log(
@@ -421,7 +425,8 @@ async function scoreTwist(
       return { twistScore: null, twistDifficulty: null, twistErrors: null };
     }
 
-    const scored = scoreResult.data?.results?.[0];
+    // Describe endpoint may return results array or single object
+    const scored = scoreResult.data?.results?.[0] || scoreResult.data;
     const twistScore = scored?.score || null;
     const twistDifficulty = scored?.score_data?.difficulty || null;
     const issues = scored?.score_data?.issues || [];
