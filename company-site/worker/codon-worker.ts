@@ -32,7 +32,7 @@ import {
 import {
   createFragmentConstruct,
   describeConstruct,
-  getConstruct,
+  TWIST_ERROR_CODES,
 } from "../src/lib/twist";
 
 
@@ -411,7 +411,7 @@ async function scoreTwist(
     // Brief pause to let Twist process the construct
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
-    // Trigger scoring via describe endpoint
+    // Trigger scoring via describe endpoint — returns an array
     const scoreResult = await describeConstruct(String(constructId));
 
     if (scoreResult.status < 200 || scoreResult.status >= 300) {
@@ -421,29 +421,31 @@ async function scoreTwist(
       return { twistScore: null, twistDifficulty: null, twistErrors: null };
     }
 
-    // Describe returns an array — extract score_data (issues) from it
     const describeData = Array.isArray(scoreResult.data)
       ? scoreResult.data[0]
       : scoreResult.data;
     const issues = describeData?.score_data?.issues || [];
 
-    // Now fetch the construct itself to get the updated score field
-    const constructResult = await getConstruct(String(constructId));
-    const constructData = Array.isArray(constructResult.data)
-      ? constructResult.data[0]
-      : constructResult.data;
+    // The sandbox API doesn't set score/difficulty explicitly —
+    // derive from issues using our TWIST_ERROR_CODES knowledge:
+    //   No issues → STANDARD (BUILDABLE)
+    //   All issues fixable → COMPLEX (BUILDABLE)
+    //   Any unfixable issue → NOT ACCEPTED (UNBUILDABLE)
+    let twistScore: string;
+    let twistDifficulty: string;
 
-    // Log the construct score fields (without the bulky sequences)
-    const { sequences: _seq, ...constructDebug } = constructData || {};
-    console.log(
-      `[${new Date().toISOString()}] Twist construct after scoring for job ${jobId}: ${JSON.stringify(constructDebug).slice(0, 1000)}`
-    );
-
-    const twistScore = constructData?.score || describeData?.score || null;
-    const twistDifficulty =
-      constructData?.score_data?.difficulty ||
-      describeData?.score_data?.difficulty ||
-      null;
+    if (issues.length === 0) {
+      twistScore = "BUILDABLE";
+      twistDifficulty = "STANDARD";
+    } else {
+      const hasUnfixable = issues.some((issue: { code?: number }) => {
+        const known = issue.code ? TWIST_ERROR_CODES[issue.code] : null;
+        // If we don't recognize the code, treat it as unfixable to be safe
+        return known ? !known.fixable : true;
+      });
+      twistScore = hasUnfixable ? "UNBUILDABLE" : "BUILDABLE";
+      twistDifficulty = hasUnfixable ? "NOT ACCEPTED" : "COMPLEX";
+    }
 
     console.log(
       `[${new Date().toISOString()}] Twist score for job ${jobId}: ${twistScore} (${twistDifficulty}), ${issues.length} issue(s)`
