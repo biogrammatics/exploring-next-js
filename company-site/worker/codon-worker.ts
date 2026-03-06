@@ -394,6 +394,11 @@ async function scoreTwist(
       return { twistScore: null, twistDifficulty: null, twistErrors: null };
     }
 
+    // Debug: log the full Twist response to determine structure
+    console.log(
+      `[${new Date().toISOString()}] Twist create response for job ${jobId}: ${JSON.stringify(createResult.data).slice(0, 1000)}`
+    );
+
     const results = createResult.data?.results;
     const constructId = results?.[0]?.id;
     if (!constructId) {
