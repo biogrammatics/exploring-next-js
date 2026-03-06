@@ -32,6 +32,7 @@ import {
 import {
   createFragmentConstruct,
   describeConstruct,
+  getConstruct,
 } from "../src/lib/twist";
 
 
@@ -410,26 +411,39 @@ async function scoreTwist(
     // Brief pause to let Twist process the construct
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
-    // Score the construct
+    // Trigger scoring via describe endpoint
     const scoreResult = await describeConstruct(String(constructId));
-
-    // Debug: log the score response
-    console.log(
-      `[${new Date().toISOString()}] Twist describe response for job ${jobId}: ${JSON.stringify(scoreResult.data).slice(0, 1000)}`
-    );
 
     if (scoreResult.status < 200 || scoreResult.status >= 300) {
       console.log(
-        `[${new Date().toISOString()}] Twist scoring failed for job ${jobId}: HTTP ${scoreResult.status}`
+        `[${new Date().toISOString()}] Twist describe failed for job ${jobId}: HTTP ${scoreResult.status}`
       );
       return { twistScore: null, twistDifficulty: null, twistErrors: null };
     }
 
-    // Describe endpoint may return results array or single object
-    const scored = scoreResult.data?.results?.[0] || scoreResult.data;
-    const twistScore = scored?.score || null;
-    const twistDifficulty = scored?.score_data?.difficulty || null;
-    const issues = scored?.score_data?.issues || [];
+    // Describe returns an array — extract score_data (issues) from it
+    const describeData = Array.isArray(scoreResult.data)
+      ? scoreResult.data[0]
+      : scoreResult.data;
+    const issues = describeData?.score_data?.issues || [];
+
+    // Now fetch the construct itself to get the updated score field
+    const constructResult = await getConstruct(String(constructId));
+    const constructData = Array.isArray(constructResult.data)
+      ? constructResult.data[0]
+      : constructResult.data;
+
+    // Log the construct score fields (without the bulky sequences)
+    const { sequences: _seq, ...constructDebug } = constructData || {};
+    console.log(
+      `[${new Date().toISOString()}] Twist construct after scoring for job ${jobId}: ${JSON.stringify(constructDebug).slice(0, 1000)}`
+    );
+
+    const twistScore = constructData?.score || describeData?.score || null;
+    const twistDifficulty =
+      constructData?.score_data?.difficulty ||
+      describeData?.score_data?.difficulty ||
+      null;
 
     console.log(
       `[${new Date().toISOString()}] Twist score for job ${jobId}: ${twistScore} (${twistDifficulty}), ${issues.length} issue(s)`

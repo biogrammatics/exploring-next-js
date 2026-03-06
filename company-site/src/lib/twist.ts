@@ -149,10 +149,19 @@ export async function createConstruct(body: {
   });
 }
 
-/** Step 3: Score/describe a construct by ID */
+/** Step 3: Score/describe a construct by ID (triggers scoring) */
 export async function describeConstruct(constructId: string) {
   const res = await fetch(
     userPath(`/constructs/describe/?id__in=${encodeURIComponent(constructId)}`),
+    { headers: getHeaders() }
+  );
+  return parseResponse(res);
+}
+
+/** Step 4: Get a construct by ID (to read updated score after describe) */
+export async function getConstruct(constructId: string) {
+  const res = await fetch(
+    userPath(`/constructs/?id__in=${encodeURIComponent(constructId)}`),
     { headers: getHeaders() }
   );
   return parseResponse(res);
