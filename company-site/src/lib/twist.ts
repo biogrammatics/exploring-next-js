@@ -103,7 +103,7 @@ export async function createClonedConstruct(body: {
     headers: getHeaders(),
     body: JSON.stringify({
       type: "CLONED_GENE",
-      adapters_on: false,
+      adapters_on: true,
       ...body,
     }),
   });
@@ -120,7 +120,7 @@ export async function createFragmentConstruct(body: {
     headers: getHeaders(),
     body: JSON.stringify({
       type: "NON_CLONED_GENE",
-      adapters_on: false,
+      adapters_on: true,
       ...body,
     }),
   });
