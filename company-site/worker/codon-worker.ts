@@ -32,7 +32,6 @@ import {
 import {
   createFragmentConstruct,
   describeConstruct,
-  TWIST_ERROR_CODES,
 } from "../src/lib/twist";
 
 
@@ -426,26 +425,9 @@ async function scoreTwist(
       : scoreResult.data;
     const issues = describeData?.score_data?.issues || [];
 
-    // The sandbox API doesn't set score/difficulty explicitly —
-    // derive from issues using our TWIST_ERROR_CODES knowledge:
-    //   No issues → STANDARD (BUILDABLE)
-    //   All issues fixable → COMPLEX (BUILDABLE)
-    //   Any unfixable issue → NOT ACCEPTED (UNBUILDABLE)
-    let twistScore: string;
-    let twistDifficulty: string;
-
-    if (issues.length === 0) {
-      twistScore = "BUILDABLE";
-      twistDifficulty = "STANDARD";
-    } else {
-      const hasUnfixable = issues.some((issue: { code?: number }) => {
-        const known = issue.code ? TWIST_ERROR_CODES[issue.code] : null;
-        // If we don't recognize the code, treat it as unfixable to be safe
-        return known ? !known.fixable : true;
-      });
-      twistScore = hasUnfixable ? "UNBUILDABLE" : "BUILDABLE";
-      twistDifficulty = hasUnfixable ? "NOT ACCEPTED" : "COMPLEX";
-    }
+    // Read score and difficulty directly from the API response
+    const twistScore = describeData?.score || null;
+    const twistDifficulty = describeData?.score_data?.difficulty || null;
 
     console.log(
       `[${new Date().toISOString()}] Twist score for job ${jobId}: ${twistScore} (${twistDifficulty}), ${issues.length} issue(s)`
