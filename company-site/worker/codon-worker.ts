@@ -32,6 +32,7 @@ import {
 import {
   createClonedConstruct,
   describeConstruct,
+  getConstruct,
 } from "../src/lib/twist";
 
 // pTwist PIC9 vector — hardcoded for Twist scoring
@@ -413,27 +414,49 @@ async function scoreTwist(
       `[${new Date().toISOString()}] Twist construct created for job ${jobId}: ${constructId}`
     );
 
-    // Brief pause to let Twist process the construct
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    // Trigger scoring via describe endpoint
+    const describeResult = await describeConstruct(String(constructId));
 
-    // Trigger scoring via describe endpoint — returns an array
-    const scoreResult = await describeConstruct(String(constructId));
-
-    if (scoreResult.status < 200 || scoreResult.status >= 300) {
+    if (describeResult.status < 200 || describeResult.status >= 300) {
       console.log(
-        `[${new Date().toISOString()}] Twist describe failed for job ${jobId}: HTTP ${scoreResult.status}`
+        `[${new Date().toISOString()}] Twist describe failed for job ${jobId}: HTTP ${describeResult.status}`
       );
       return { twistScore: null, twistDifficulty: null, twistErrors: null };
     }
 
-    const describeData = Array.isArray(scoreResult.data)
-      ? scoreResult.data[0]
-      : scoreResult.data;
-    const issues = describeData?.score_data?.issues || [];
+    // Poll the construct until Twist finishes scoring (up to 30s)
+    const MAX_POLL_ATTEMPTS = 6;
+    const POLL_INTERVAL = 5000; // 5 seconds between polls
+    let scoredData = null;
 
-    // Read score and difficulty directly from the API response
-    const twistScore = describeData?.score || null;
-    const twistDifficulty = describeData?.score_data?.difficulty || null;
+    for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+
+      const pollResult = await getConstruct(String(constructId));
+      const pollData = Array.isArray(pollResult.data)
+        ? pollResult.data[0]
+        : pollResult.data;
+
+      console.log(
+        `[${new Date().toISOString()}] Twist poll ${attempt}/${MAX_POLL_ATTEMPTS} for job ${jobId}: scored=${pollData?.scored}, score=${pollData?.score}`
+      );
+
+      if (pollData?.scored === true && pollData?.score !== "NOT_SCORED") {
+        scoredData = pollData;
+        break;
+      }
+    }
+
+    if (!scoredData) {
+      console.log(
+        `[${new Date().toISOString()}] Twist scoring timed out for job ${jobId} after ${MAX_POLL_ATTEMPTS} attempts`
+      );
+      return { twistScore: null, twistDifficulty: null, twistErrors: null };
+    }
+
+    const issues = scoredData?.score_data?.issues || [];
+    const twistScore = scoredData?.score || null;
+    const twistDifficulty = scoredData?.score_data?.difficulty || null;
 
     console.log(
       `[${new Date().toISOString()}] Twist score for job ${jobId}: ${twistScore} (${twistDifficulty}), ${issues.length} issue(s)`
