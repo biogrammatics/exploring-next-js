@@ -32,7 +32,6 @@ import {
 import {
   createClonedConstruct,
   describeConstruct,
-  getConstruct,
 } from "../src/lib/twist";
 
 // pTwist PIC9 vector — hardcoded for Twist scoring
@@ -414,37 +413,37 @@ async function scoreTwist(
       `[${new Date().toISOString()}] Twist construct created for job ${jobId}: ${constructId}`
     );
 
-    // Trigger scoring via describe endpoint
-    const describeResult = await describeConstruct(String(constructId));
-
-    if (describeResult.status < 200 || describeResult.status >= 300) {
-      console.log(
-        `[${new Date().toISOString()}] Twist describe failed for job ${jobId}: HTTP ${describeResult.status}`
-      );
-      return { twistScore: null, twistDifficulty: null, twistErrors: null };
-    }
-
-    // Poll the construct until Twist finishes scoring (up to 30s)
+    // Poll describe endpoint until Twist finishes scoring (up to 30s)
+    // Describe both triggers and returns scoring — but may need multiple calls
     const MAX_POLL_ATTEMPTS = 6;
     const POLL_INTERVAL = 5000; // 5 seconds between polls
     let scoredData = null;
 
     for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt++) {
-      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+      const describeResult = await describeConstruct(String(constructId));
 
-      const pollResult = await getConstruct(String(constructId));
-      const pollData = Array.isArray(pollResult.data)
-        ? pollResult.data[0]
-        : pollResult.data;
+      if (describeResult.status < 200 || describeResult.status >= 300) {
+        console.log(
+          `[${new Date().toISOString()}] Twist describe failed for job ${jobId}: HTTP ${describeResult.status}`
+        );
+        return { twistScore: null, twistDifficulty: null, twistErrors: null };
+      }
+
+      const describeData = Array.isArray(describeResult.data)
+        ? describeResult.data[0]
+        : describeResult.data;
 
       console.log(
-        `[${new Date().toISOString()}] Twist poll ${attempt}/${MAX_POLL_ATTEMPTS} for job ${jobId}: scored=${pollData?.scored}, score=${pollData?.score}`
+        `[${new Date().toISOString()}] Twist describe ${attempt}/${MAX_POLL_ATTEMPTS} for job ${jobId}: scored=${describeData?.scored}, score=${describeData?.score}, difficulty=${describeData?.score_data?.difficulty}`
       );
 
-      if (pollData?.scored === true && pollData?.score !== "NOT_SCORED") {
-        scoredData = pollData;
+      if (describeData?.scored === true && describeData?.score !== "NOT_SCORED") {
+        scoredData = describeData;
         break;
       }
+
+      // Wait before next attempt
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
     }
 
     if (!scoredData) {
