@@ -325,7 +325,7 @@ export default function CodonOptimizationPage() {
                           {jobStatus.twistDifficulty === "STANDARD"
                             ? "Standard — ready to order"
                             : jobStatus.twistDifficulty === "COMPLEX"
-                            ? "Complex — synthesizable with additional cost"
+                            ? "Complex — Synthesis can potentially fail"
                             : "Not Accepted — sequence modifications needed"}
                         </p>
                       </div>
