@@ -31,6 +31,7 @@ export default function CheckoutPage() {
   const { items, total, clearCart } = useCart();
   const [loading, setLoading] = useState(false);
   const [createAccount, setCreateAccount] = useState(false);
+  const [smsOptIn, setSmsOptIn] = useState(false);
 
   const [address, setAddress] = useState<ShippingAddress>({
     name: "",
@@ -172,6 +173,7 @@ export default function CheckoutPage() {
               }
             : null,
           createAccount: !session && createAccount,
+          smsOptIn,
         }),
       });
 
@@ -298,12 +300,23 @@ export default function CheckoutPage() {
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Required for FedEx shipping. By providing your phone number you consent to receive order confirmation and shipping notification messages via SMS. Msg &amp; data rates may apply. Reply STOP to opt out. See our{" "}
-                    <Link href="/terms" className="text-blue-600 hover:underline">Terms</Link> and{" "}
-                    <Link href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</Link>.
+                    Required for FedEx shipping.
                   </p>
                 </div>
               </div>
+              <label className="flex items-start gap-3 mt-4 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={smsOptIn}
+                  onChange={(e) => setSmsOptIn(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">
+                  I agree to receive order confirmation and shipping notification messages via SMS. Msg &amp; data rates may apply. Reply STOP to opt out at any time. See our{" "}
+                  <Link href="/terms" className="text-blue-600 hover:underline">Terms</Link> and{" "}
+                  <Link href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</Link>.
+                </span>
+              </label>
             </div>
 
             {/* Shipping Address */}
