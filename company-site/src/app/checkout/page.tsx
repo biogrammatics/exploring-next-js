@@ -191,24 +191,7 @@ export default function CheckoutPage() {
     }
   };
 
-  if (items.length === 0) {
-    return (
-      <main className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-8 text-white drop-shadow-lg">
-          Checkout
-        </h1>
-        <div className="glass-panel text-center py-12">
-          <p className="text-gray-600 mb-4">Your cart is empty</p>
-          <Link
-            href="/vectors"
-            className="inline-block glass-button text-white px-6 py-2 rounded-lg"
-          >
-            Browse Vectors
-          </Link>
-        </div>
-      </main>
-    );
-  }
+  const cartEmpty = items.length === 0;
 
   return (
     <main className="container mx-auto px-4 py-8">
@@ -303,7 +286,7 @@ export default function CheckoutPage() {
                     htmlFor="phone"
                     className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    Phone
+                    Phone *
                   </label>
                   <input
                     type="tel"
@@ -311,8 +294,14 @@ export default function CheckoutPage() {
                     name="phone"
                     value={address.phone}
                     onChange={handleChange}
+                    required
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Required for FedEx shipping. By providing your phone number you consent to receive order confirmation and shipping notification messages via SMS. Msg &amp; data rates may apply. Reply STOP to opt out. See our{" "}
+                    <Link href="/terms" className="text-blue-600 hover:underline">Terms</Link> and{" "}
+                    <Link href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</Link>.
+                  </p>
                 </div>
               </div>
             </div>
@@ -546,60 +535,74 @@ export default function CheckoutPage() {
               <h2 className="text-lg font-semibold mb-4 text-gray-800">
                 Order Summary
               </h2>
-              <div className="divide-y divide-gray-200 mb-4">
-                {items.map((item) => (
-                  <div key={item.id} className="py-3 flex justify-between">
-                    <div>
-                      <p className="font-medium text-gray-800">{item.name}</p>
-                      <p className="text-sm text-gray-500">
-                        Qty: {item.quantity}
-                      </p>
-                    </div>
-                    <p className="text-gray-800">
-                      {formatPrice(item.price * item.quantity)}
-                    </p>
+              {cartEmpty ? (
+                <div className="text-center py-6">
+                  <p className="text-gray-500 mb-4">Your cart is empty</p>
+                  <Link
+                    href="/vectors"
+                    className="text-blue-600 hover:underline"
+                  >
+                    Browse Vectors
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  <div className="divide-y divide-gray-200 mb-4">
+                    {items.map((item) => (
+                      <div key={item.id} className="py-3 flex justify-between">
+                        <div>
+                          <p className="font-medium text-gray-800">{item.name}</p>
+                          <p className="text-sm text-gray-500">
+                            Qty: {item.quantity}
+                          </p>
+                        </div>
+                        <p className="text-gray-800">
+                          {formatPrice(item.price * item.quantity)}
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <div className="border-t border-gray-200 pt-4 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span className="text-gray-800">{formatPrice(total)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Shipping</span>
-                  {selectedRate ? (
-                    <span className="text-gray-800">
-                      {formatDollars(selectedRate.totalCost)}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400 text-sm">
-                      {ratesLoading ? "Calculating..." : "Select above"}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="border-t border-gray-200 pt-4 mt-4 mb-6">
-                <div className="flex justify-between font-semibold text-lg">
-                  <span className="text-gray-800">Total</span>
-                  <span className="text-gray-800">
-                    {formatPrice(grandTotal)}
-                  </span>
-                </div>
-              </div>
-              <button
-                type="submit"
-                disabled={loading || (!selectedRate && !ratesFallback)}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {loading ? "Processing..." : "Continue to Payment"}
-              </button>
-              <Link
-                href="/cart"
-                className="block w-full text-center py-3 text-gray-600 hover:text-gray-900 mt-2"
-              >
-                Back to Cart
-              </Link>
+                  <div className="border-t border-gray-200 pt-4 space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Subtotal</span>
+                      <span className="text-gray-800">{formatPrice(total)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Shipping</span>
+                      {selectedRate ? (
+                        <span className="text-gray-800">
+                          {formatDollars(selectedRate.totalCost)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-sm">
+                          {ratesLoading ? "Calculating..." : "Select above"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="border-t border-gray-200 pt-4 mt-4 mb-6">
+                    <div className="flex justify-between font-semibold text-lg">
+                      <span className="text-gray-800">Total</span>
+                      <span className="text-gray-800">
+                        {formatPrice(grandTotal)}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading || (!selectedRate && !ratesFallback)}
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {loading ? "Processing..." : "Continue to Payment"}
+                  </button>
+                  <Link
+                    href="/cart"
+                    className="block w-full text-center py-3 text-gray-600 hover:text-gray-900 mt-2"
+                  >
+                    Back to Cart
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
