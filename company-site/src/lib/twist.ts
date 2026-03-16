@@ -82,7 +82,15 @@ async function parseResponse(res: Response) {
 /** Step 0: Test connectivity — GET user profile */
 export async function testConnection() {
   const res = await fetch(userPath("/"), { headers: getHeaders() });
-  return parseResponse(res);
+  const parsed = await parseResponse(res);
+  return {
+    ...parsed,
+    config: {
+      email: TWIST_API_EMAIL,
+      baseUrl: TWIST_API_BASE_URL,
+      emailSource: process.env.TWIST_API_EMAIL ? "env" : "fallback",
+    },
+  };
 }
 
 /** Step 1: Get available vectors and insertion points */
