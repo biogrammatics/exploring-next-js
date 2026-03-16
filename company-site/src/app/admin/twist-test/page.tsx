@@ -5,6 +5,11 @@ import { useState } from "react";
 interface ApiResult {
   status: number;
   data: unknown;
+  config?: {
+    email: string;
+    baseUrl: string;
+    emailSource: string;
+  };
 }
 
 const SAMPLE_SEQUENCE =
@@ -309,6 +314,15 @@ function ResultDisplay({ result }: { result?: ApiResult | null }) {
 
   return (
     <div className="mt-4">
+      {result.config && (
+        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs">
+          <span className="font-semibold text-blue-800">Config:</span>{" "}
+          <span className="font-mono">
+            {result.config.email} ({result.config.emailSource})
+          </span>
+          <span className="text-blue-500 ml-2">→ {result.config.baseUrl}</span>
+        </div>
+      )}
       {result.status > 0 && (
         <span
           className={`inline-block px-2 py-0.5 rounded text-sm font-medium border mb-2 ${statusColor}`}
