@@ -46,7 +46,13 @@ export default function TwistTestPage() {
   const testConnection = () =>
     runStep("connection", async () => {
       const res = await fetch("/api/twist/test");
-      return res.json();
+      const json = await res.json();
+      // Ensure we always have status/data shape even on errors
+      return {
+        status: json.status ?? res.status,
+        data: json.data ?? json,
+        ...(json.config ? { config: json.config } : {}),
+      };
     });
 
   const fetchVectors = () =>

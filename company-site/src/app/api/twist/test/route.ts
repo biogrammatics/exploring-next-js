@@ -13,7 +13,17 @@ export async function GET() {
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
+      {
+        status: 500,
+        data: { error: error instanceof Error ? error.message : "Unknown error" },
+        config: {
+          email: process.env.TWIST_API_EMAIL || "(not set)",
+          baseUrl: process.env.TWIST_API_BASE_URL || "(not set)",
+          emailSource: process.env.TWIST_API_EMAIL ? "env" : "fallback",
+          authTokenSet: !!process.env.TWIST_AUTH_TOKEN,
+          endUserTokenSet: !!process.env.TWIST_END_USER_TOKEN,
+        },
+      },
       { status: 500 }
     );
   }
