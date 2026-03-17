@@ -35,8 +35,8 @@ import {
 } from "../src/lib/twist";
 
 // pTwist PIC9 vector — hardcoded for Twist scoring
-const TWIST_VECTOR_MES_UID = "VEC_68a4e99691216c000a3739e7";
-const TWIST_INSERTION_POINT_MES_UID = "494e5353-68a4-e9b2-9121-6c000a3739ee";
+const TWIST_VECTOR_MES_UID = "VEC_62fbf2c33348020007daf7e2"; // pJAN
+const TWIST_INSERTION_POINT_MES_UID = "494e5353-62fb-f312-26e7-7b000a794384"; // Bsa I
 
 
 // Initialize clients
