@@ -44,14 +44,33 @@ const shipping = {
   country: "US",
 };
 
+type CreatedItems = { create: Array<Record<string, unknown>> };
+type OrderData = {
+  subtotal: number;
+  total: number;
+  shippingCost: number;
+  shippingMethod: string | null;
+  userId?: string;
+  vectorOrderItems: CreatedItems;
+  strainOrderItems: CreatedItems;
+  items: CreatedItems;
+};
+
 /** The data object passed to prisma.order.create in the most recent call. */
-function lastOrderData() {
-  return vi.mocked(prisma.order.create).mock.calls.at(-1)![0].data;
+function lastOrderData(): OrderData {
+  return vi.mocked(prisma.order.create).mock.calls.at(-1)![0]
+    .data as unknown as OrderData;
 }
 
+type StripeArgs = {
+  line_items: Array<{
+    price_data: { unit_amount: number; product_data: { name: string } };
+  }>;
+};
+
 /** The args passed to stripe.checkout.sessions.create in the most recent call. */
-function lastStripeArgs() {
-  return vi.mocked(stripe.checkout.sessions.create).mock.calls.at(-1)![0];
+function lastStripeArgs(): StripeArgs {
+  return vi.mocked(stripe.checkout.sessions.create).mock.calls.at(-1)![0] as unknown as StripeArgs;
 }
 
 beforeEach(() => {
