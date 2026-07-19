@@ -639,14 +639,18 @@ enum OrderStatus {
   SHIPPED
   DELIVERED
   CANCELLED
+  PAYMENT_FAILED
+  REFUNDED
+  DISPUTED
 }
 
 model Order {
   id              String      @id @default(cuid())
   orderNumber     String      @unique @default(cuid())
-  status          OrderStatus @default(PENDING)
-  customerEmail   String
-  stripeSessionId String?     @unique
+  status              OrderStatus @default(PENDING)
+  customerEmail       String
+  stripeSessionId     String?     @unique
+  stripePaymentIntentId String?   @unique
 
   // Totals (in cents)
   subtotal     Int
@@ -752,6 +756,16 @@ model StrainOrderItem {
   @@index([orderId])
   @@index([strainId])
   @@index([shippedLotId])
+}
+
+// Idempotency ledger for Stripe webhook deliveries. The event id is the primary
+// key, so a replayed event fails to insert and is skipped. The row is written
+// in the same transaction as the event's side effects, so a failed handler
+// rolls back the ledger entry too and Stripe's retry is allowed to reprocess.
+model ProcessedWebhookEvent {
+  id          String   @id // Stripe event id (evt_...)
+  type        String
+  processedAt DateTime @default(now())
 }
 
 // ============================================================================
