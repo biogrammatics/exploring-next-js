@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { auth } from "@/lib/auth";
+import { getQuotedRates } from "@/lib/shipstation";
+
+const MAX_QUANTITY_PER_ITEM = 1000;
 
 interface ShippingAddress {
   name: string;
@@ -23,8 +26,11 @@ interface CheckoutItem {
 
 interface ShippingRateInfo {
   serviceCode: string;
-  serviceName: string;
-  costCents: number;
+  // serviceName and costCents may be sent by the client for display purposes
+  // but are NOT trusted — the authoritative price is recomputed server-side
+  // from serviceCode against the shipping destination.
+  serviceName?: string;
+  costCents?: number;
 }
 
 export async function POST(request: NextRequest) {
@@ -65,10 +71,26 @@ export async function POST(request: NextRequest) {
     const lineItems: StripeLineItem[] = [];
     let subtotal = 0;
 
-    // Track vector items separately for VectorOrderItem creation
+    // Track each product type separately so every charged item is persisted as
+    // its corresponding order-item record (not just vectors).
     const vectorItems: { vectorId: string; quantity: number; price: number }[] = [];
+    const strainItems: { strainId: string; quantity: number; price: number }[] = [];
+    const productItems: { productId: string; quantity: number; price: number }[] = [];
 
     for (const item of items) {
+      // Reject non-positive / non-integer / absurd quantities before they can
+      // corrupt the subtotal.
+      if (
+        !Number.isInteger(item.quantity) ||
+        item.quantity < 1 ||
+        item.quantity > MAX_QUANTITY_PER_ITEM
+      ) {
+        return NextResponse.json(
+          { error: `Invalid quantity for item "${item.productId}"` },
+          { status: 400 }
+        );
+      }
+
       if (item.productType === "vector") {
         const vector = await prisma.vector.findUnique({
           where: { id: item.productId },
@@ -136,6 +158,11 @@ export async function POST(request: NextRequest) {
         });
 
         subtotal += strain.salePrice * item.quantity;
+        strainItems.push({
+          strainId: strain.id,
+          quantity: item.quantity,
+          price: strain.salePrice,
+        });
       } else {
         // Fallback to generic Product model
         const product = await prisma.product.findUnique({
@@ -162,22 +189,90 @@ export async function POST(request: NextRequest) {
         });
 
         subtotal += product.price * item.quantity;
+        productItems.push({
+          productId: product.id,
+          quantity: item.quantity,
+          price: product.price,
+        });
       }
     }
 
-    // Add shipping as a line item if selected
-    const shippingCostCents = shippingRate?.costCents || 0;
-    if (shippingCostCents > 0) {
+    // Recompute shipping server-side. The client only tells us WHICH service
+    // it selected (serviceCode); the price is re-derived from ShipStation for
+    // the submitted destination so a tampered `costCents` cannot reduce the
+    // shipping charge.
+    let shippingCostCents = 0;
+    let shippingServiceName: string | null = null;
+
+    if (shippingRate?.serviceCode) {
+      if (!shipping.zip || !shipping.country) {
+        return NextResponse.json(
+          { error: "A shipping address is required to calculate shipping" },
+          { status: 400 }
+        );
+      }
+
+      let quotedRates;
+      try {
+        quotedRates = await getQuotedRates({
+          postalCode: shipping.zip,
+          country: shipping.country,
+          state: shipping.state,
+          city: shipping.city,
+        });
+      } catch (err) {
+        console.error("Server-side shipping recalculation failed:", err);
+        return NextResponse.json(
+          { error: "Unable to verify shipping rates. Please try again." },
+          { status: 502 }
+        );
+      }
+
+      const matched = quotedRates.find(
+        (r) => r.serviceCode === shippingRate.serviceCode
+      );
+      if (!matched) {
+        return NextResponse.json(
+          {
+            error:
+              "The selected shipping method is no longer available. Please reselect a shipping option.",
+          },
+          { status: 400 }
+        );
+      }
+
+      // Handling fee already applied in getQuotedRates; totalCost is a whole
+      // number of dollars.
+      shippingCostCents = Math.round(matched.totalCost * 100);
+      shippingServiceName = matched.serviceName;
+
       lineItems.push({
         price_data: {
           currency: "usd",
           product_data: {
-            name: `Shipping: ${shippingRate!.serviceName}`,
+            name: `Shipping: ${shippingServiceName}`,
           },
           unit_amount: shippingCostCents,
         },
         quantity: 1,
       });
+    }
+
+    // Defense-in-depth: the persisted item prices must sum to the subtotal we
+    // charge. These are built from the same values, so a mismatch means a code
+    // bug — fail closed rather than charge an amount we can't account for.
+    const persistedSubtotal =
+      vectorItems.reduce((s, i) => s + i.price * i.quantity, 0) +
+      strainItems.reduce((s, i) => s + i.price * i.quantity, 0) +
+      productItems.reduce((s, i) => s + i.price * i.quantity, 0);
+    if (persistedSubtotal !== subtotal) {
+      console.error(
+        `Checkout subtotal mismatch: charged ${subtotal}, persisted ${persistedSubtotal}`
+      );
+      return NextResponse.json(
+        { error: "Order total could not be verified. Please try again." },
+        { status: 500 }
+      );
     }
 
     const totalAmount = subtotal + shippingCostCents;
@@ -198,13 +293,27 @@ export async function POST(request: NextRequest) {
         shippingState: shipping.state,
         shippingZip: shipping.zip,
         shippingCountry: shipping.country,
-        shippingMethod: shippingRate?.serviceName || null,
-        // Create vector-specific order items
+        shippingMethod: shippingServiceName,
+        // Persist every charged item as its corresponding order-item record.
         vectorOrderItems: {
           create: vectorItems.map((vi) => ({
             vectorId: vi.vectorId,
             quantity: vi.quantity,
             price: vi.price,
+          })),
+        },
+        strainOrderItems: {
+          create: strainItems.map((si) => ({
+            strainId: si.strainId,
+            quantity: si.quantity,
+            price: si.price,
+          })),
+        },
+        items: {
+          create: productItems.map((pi) => ({
+            productId: pi.productId,
+            quantity: pi.quantity,
+            price: pi.price,
           })),
         },
       },

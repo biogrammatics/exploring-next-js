@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  getShippingRates,
-  filterCommonRates,
-  addHandlingFee,
+  getQuotedRates,
   type ShippingDestination,
 } from "@/lib/shipstation";
 
@@ -18,16 +16,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const allRates = await getShippingRates({
+    const ratesWithHandling = await getQuotedRates({
       postalCode,
       country,
       state,
       city,
     });
-
-    // Filter to common services and add handling fee
-    const filteredRates = filterCommonRates(allRates);
-    const ratesWithHandling = addHandlingFee(filteredRates);
 
     return NextResponse.json({ rates: ratesWithHandling });
   } catch (error) {

@@ -100,6 +100,22 @@ export async function getShippingRates(
 }
 
 /**
+ * Get the customer-facing quoted rates for a destination: the raw carrier
+ * rates filtered to common services with the handling fee applied.
+ *
+ * This is the single source of truth for shipping prices. Both the rate-quote
+ * endpoint (browser display) and checkout (server-side price authority) call
+ * it, so the price a customer sees is exactly the price that is charged and
+ * cannot be altered client-side.
+ */
+export async function getQuotedRates(
+  destination: ShippingDestination
+): Promise<ShippingRate[]> {
+  const allRates = await getShippingRates(destination);
+  return addHandlingFee(filterCommonRates(allRates));
+}
+
+/**
  * Filter rates to only include commonly used FedEx services.
  * Removes obscure or business-specific services.
  */
