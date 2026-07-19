@@ -97,7 +97,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const session = await auth();
-    if (!session?.user) {
+    const isAdmin =
+      session?.user?.role === "ADMIN" || session?.user?.role === "SUPER_ADMIN";
+    if (!session?.user || !isAdmin) {
+      // Lot QC file metadata is internal — admin only, matching the POST above.
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

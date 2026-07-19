@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
 import type { VectorFileType } from "@/generated/prisma/client";
 import { AddToCartButton } from "@/app/components/cart/add-to-cart-button";
 
@@ -45,6 +46,15 @@ export default async function VectorDetailPage({ params }: PageProps) {
   });
 
   if (!vector) {
+    notFound();
+  }
+
+  // Publication gate: only admins may view an unavailable/unpublished vector's
+  // detail page (preview). Everyone else gets a 404 that doesn't leak existence.
+  const session = await auth();
+  const isAdmin =
+    session?.user?.role === "ADMIN" || session?.user?.role === "SUPER_ADMIN";
+  if (!vector.productStatus?.isAvailable && !isAdmin) {
     notFound();
   }
 

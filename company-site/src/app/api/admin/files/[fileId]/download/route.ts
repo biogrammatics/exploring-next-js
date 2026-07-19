@@ -30,10 +30,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         return NextResponse.redirect(signedUrl);
       }
 
-      // For unavailable products, require authentication
+      // Unavailable / unpublished products: admin only. A plain authenticated
+      // user must not be able to reach files for products that aren't public.
       const session = await auth();
       if (!session?.user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      const isAdmin =
+        session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN";
+      if (!isAdmin) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
       const signedUrl = await getSignedDownloadUrl(vectorFile.s3Key, vectorFile.fileName, 3600);
       return NextResponse.redirect(signedUrl);

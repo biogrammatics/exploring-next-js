@@ -53,15 +53,21 @@ describe("vector file downloads", () => {
     expect(res.status).toBe(401);
   });
 
-  // FINDING #8 (documented, not endorsed): for an UNAVAILABLE product, the route
-  // currently accepts ANY authenticated user — a plain USER, not just an admin.
-  // This test pins the current behavior; when #8 is fixed to require admin, flip
-  // the expectation to 401/403.
-  it("currently lets any authenticated USER download an UNAVAILABLE product file (#8)", async () => {
+  // FINDING #8 (fixed): an UNAVAILABLE product's files require admin, not just
+  // any authenticated user.
+  it("forbids a plain USER from an UNAVAILABLE product file (#8)", async () => {
     vi.mocked(prisma.vectorFile.findUnique).mockResolvedValue(vectorFile(false) as never);
     vi.mocked(auth).mockResolvedValue(userSession as never);
     const res = await call("vf1");
-    expect(res.status).toBe(307); // <-- security gap: should require admin
+    expect(res.status).toBe(403);
+  });
+
+  it("allows an ADMIN to download an UNAVAILABLE product file", async () => {
+    vi.mocked(prisma.vectorFile.findUnique).mockResolvedValue(vectorFile(false) as never);
+    vi.mocked(auth).mockResolvedValue(adminSession as never);
+    const res = await call("vf1");
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe("https://s3.example/signed-url");
   });
 });
 
