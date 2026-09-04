@@ -50,12 +50,44 @@ const TWIST_API_BASE_URL =
 const TWIST_API_EMAIL =
   process.env.TWIST_API_EMAIL || "twist.sandbox@biogrammatics.com";
 
-function getHeaders(): Record<string, string> {
-  const authToken = process.env.TWIST_AUTH_TOKEN;
-  const endUserToken = process.env.TWIST_END_USER_TOKEN;
+/**
+ * Which Twist account to talk to.
+ *
+ * The sandbox has never placed an order, so /orders/ correctly returns an
+ * empty array there. Reaching real order history means production
+ * credentials, which are a separate set of env vars.
+ */
+export type TwistEnv = "staging" | "production";
+
+export function envConfig(env: TwistEnv = "staging") {
+  if (env === "production") {
+    return {
+      baseUrl:
+        process.env.TWIST_PROD_API_BASE_URL ||
+        "https://twist-api.twistbioscience.com",
+      email:
+        process.env.TWIST_PROD_API_EMAIL || "twist.production@biogrammatics.com",
+      authToken: process.env.TWIST_PROD_AUTH_TOKEN,
+      endUserToken: process.env.TWIST_PROD_END_USER_TOKEN,
+    };
+  }
+  return {
+    baseUrl: TWIST_API_BASE_URL,
+    email: TWIST_API_EMAIL,
+    authToken: process.env.TWIST_AUTH_TOKEN,
+    endUserToken: process.env.TWIST_END_USER_TOKEN,
+  };
+}
+
+function getHeaders(env: TwistEnv = "staging"): Record<string, string> {
+  const { authToken, endUserToken } = envConfig(env);
 
   if (!authToken || !endUserToken) {
-    throw new Error("TWIST_AUTH_TOKEN and TWIST_END_USER_TOKEN must be set");
+    throw new Error(
+      env === "production"
+        ? "TWIST_PROD_AUTH_TOKEN and TWIST_PROD_END_USER_TOKEN must be set"
+        : "TWIST_AUTH_TOKEN and TWIST_END_USER_TOKEN must be set"
+    );
   }
 
   return {
@@ -66,8 +98,20 @@ function getHeaders(): Record<string, string> {
   };
 }
 
-function userPath(path: string): string {
-  return `${TWIST_API_BASE_URL}/v1/users/${TWIST_API_EMAIL}${path}`;
+/**
+ * Orders are scoped to the user in the path. Custom vectors were shared
+ * across accounts, but historical orders were placed under
+ * twist@biogrammatics.com through the web UI -- so whether they are visible
+ * to the API account is an open question, and the email is overridable to
+ * find out.
+ */
+function userPath(
+  path: string,
+  env: TwistEnv = "staging",
+  emailOverride?: string
+): string {
+  const { baseUrl, email } = envConfig(env);
+  return `${baseUrl}/v1/users/${encodeURIComponent(emailOverride || email)}${path}`;
 }
 
 async function parseResponse(res: Response) {
@@ -108,7 +152,10 @@ export async function testConnection() {
  *
  * Run from Render -- Twist whitelists Render's IPs, not a local machine.
  */
-export async function probeOrderEndpoints() {
+export async function probeOrderEndpoints(
+  env: TwistEnv = "staging",
+  emailOverride?: string
+) {
   const candidates = [
     "/orders/",
     "/quotes/",
@@ -122,7 +169,9 @@ export async function probeOrderEndpoints() {
   const results = await Promise.all(
     candidates.map(async (path) => {
       try {
-        const res = await fetch(userPath(path), { headers: getHeaders() });
+        const res = await fetch(userPath(path, env, emailOverride), {
+          headers: getHeaders(env),
+        });
         const text = await res.text();
         let shape: string;
         try {
@@ -144,7 +193,14 @@ export async function probeOrderEndpoints() {
     })
   );
 
-  return { probedAt: new Date().toISOString(), baseUrl: TWIST_API_BASE_URL, results };
+  const { baseUrl, email } = envConfig(env);
+  return {
+    probedAt: new Date().toISOString(),
+    baseUrl,
+    email: emailOverride || email,
+    env,
+    results,
+  };
 }
 
 /**
@@ -157,7 +213,12 @@ export async function probeOrderEndpoints() {
  * The path is constrained to a plain resource path -- no scheme, host, dot
  * segments or query string -- so it cannot be pointed at another origin.
  */
-export async function getUserResource(resourcePath: string, query?: string) {
+export async function getUserResource(
+  resourcePath: string,
+  query?: string,
+  env: TwistEnv = "staging",
+  emailOverride?: string
+) {
   const clean = resourcePath.replace(/^\/+/, "");
   if (!/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\/?$/.test(clean)) {
     return {
@@ -166,10 +227,15 @@ export async function getUserResource(resourcePath: string, query?: string) {
     };
   }
   const suffix = query ? `?${new URLSearchParams(query).toString()}` : "";
-  const res = await fetch(userPath(`/${clean}${suffix}`), {
-    headers: getHeaders(),
+  const res = await fetch(userPath(`/${clean}${suffix}`, env, emailOverride), {
+    headers: getHeaders(env),
   });
-  return parseResponse(res);
+  const parsed = await parseResponse(res);
+  const { baseUrl, email } = envConfig(env);
+  return {
+    ...parsed,
+    config: { email: emailOverride || email, baseUrl, emailSource: env },
+  };
 }
 
 /** Step 1: Get available vectors and insertion points */

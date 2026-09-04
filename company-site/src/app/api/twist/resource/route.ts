@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getUserResource } from "@/lib/twist";
+import { getUserResource, type TwistEnv } from "@/lib/twist";
 
 /**
  * Admin route: GET an arbitrary resource under /v1/users/{email}/.
@@ -15,11 +15,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const path = request.nextUrl.searchParams.get("path") ?? "orders/";
-  const query = request.nextUrl.searchParams.get("query") ?? "";
+  const params = request.nextUrl.searchParams;
+  const path = params.get("path") ?? "orders/";
+  const query = params.get("query") ?? "";
+  const env: TwistEnv =
+    params.get("env") === "production" ? "production" : "staging";
+  const email = params.get("email") || undefined;
 
   try {
-    return NextResponse.json(await getUserResource(path, query));
+    return NextResponse.json(await getUserResource(path, query, env, email));
   } catch (error) {
     return NextResponse.json(
       {

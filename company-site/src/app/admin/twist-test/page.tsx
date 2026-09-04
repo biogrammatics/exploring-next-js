@@ -5,6 +5,8 @@ import { useState } from "react";
 interface ProbeResult {
   probedAt: string;
   baseUrl: string;
+  email?: string;
+  env?: string;
   results: { path: string; status: number; shape: string }[];
 }
 
@@ -33,6 +35,8 @@ export default function TwistTestPage() {
   const [resourcePath, setResourcePath] = useState("orders/");
   const [resourceQuery, setResourceQuery] = useState("");
   const [probe, setProbe] = useState<ProbeResult | null>(null);
+  const [twistEnv, setTwistEnv] = useState<"staging" | "production">("staging");
+  const [emailOverride, setEmailOverride] = useState("");
 
   async function runStep(key: string, fn: () => Promise<ApiResult>) {
     setLoading(key);
@@ -132,9 +136,15 @@ export default function TwistTestPage() {
       return res.json();
     });
 
+  function scopeParams() {
+    const params = new URLSearchParams({ env: twistEnv });
+    if (emailOverride.trim()) params.set("email", emailOverride.trim());
+    return params;
+  }
+
   const probeEndpoints = () =>
     runStep("probe", async () => {
-      const res = await fetch("/api/twist/probe");
+      const res = await fetch(`/api/twist/probe?${scopeParams()}`);
       const json = await res.json();
       if (Array.isArray(json?.results)) setProbe(json as ProbeResult);
       return { status: res.status, data: json };
@@ -142,7 +152,8 @@ export default function TwistTestPage() {
 
   const fetchResource = () =>
     runStep("resource", async () => {
-      const params = new URLSearchParams({ path: resourcePath });
+      const params = scopeParams();
+      params.set("path", resourcePath);
       if (resourceQuery.trim()) params.set("query", resourceQuery.trim());
       const res = await fetch(`/api/twist/resource?${params}`);
       const json = await res.json();
@@ -313,12 +324,61 @@ export default function TwistTestPage() {
         {/* Step 4: Past Orders */}
         <Section title="Step 4: Past Orders" step="4">
           <p className="text-sm text-gray-600 mb-4">
-            Order retrieval is <strong>undocumented</strong> — Twist&apos;s public
-            API page describes design, scoring and order <em>placement</em>, not
-            retrieval. So this discovers rather than assumes: probe which
-            resources exist under <code className="font-mono">/v1/users/{"{email}"}/</code>,
-            then fetch whichever one responds.
+            Probed 2026-09-04: <code className="font-mono">/orders/</code> returns{" "}
+            <strong>200</strong> (so it exists), <code className="font-mono">/quotes/</code>{" "}
+            returns 405 (exists, POST-only),{" "}
+            <code className="font-mono">/invoices/</code> and{" "}
+            <code className="font-mono">/constructs/</code> return 403 (exist,
+            listing not permitted), and shipments/order_items/carts are 404.
+            Re-probe after changing scope below.
           </p>
+
+          <div className="mb-5 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-xs text-amber-900 mb-3">
+              <strong>Orders exist but are account-scoped.</strong> The sandbox
+              has never placed an order, so <code className="font-mono">/orders/</code>{" "}
+              correctly returns an empty array there. Real history needs the
+              production account — and possibly{" "}
+              <code className="font-mono">twist@biogrammatics.com</code>, which
+              is where orders were actually placed through the web UI.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Environment
+                </label>
+                <div className="flex gap-2">
+                  {(["staging", "production"] as const).map((e) => (
+                    <button
+                      key={e}
+                      onClick={() => setTwistEnv(e)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${twistEnv === e ? "bg-amber-600 text-white border-amber-600" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"}`}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  User email <span className="text-gray-400">(override)</span>
+                </label>
+                <input
+                  type="text"
+                  value={emailOverride}
+                  onChange={(e) => setEmailOverride(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2 font-mono text-sm"
+                  placeholder="twist@biogrammatics.com"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-amber-800 mt-2">
+              Production needs <code className="font-mono">TWIST_PROD_AUTH_TOKEN</code>,{" "}
+              <code className="font-mono">TWIST_PROD_END_USER_TOKEN</code>,{" "}
+              <code className="font-mono">TWIST_PROD_API_EMAIL</code> and{" "}
+              <code className="font-mono">TWIST_PROD_API_BASE_URL</code> in Render.
+            </p>
+          </div>
 
           <div className="space-y-5">
             <div>
@@ -385,7 +445,8 @@ export default function TwistTestPage() {
                     </tbody>
                   </table>
                   <div className="px-3 py-2 bg-gray-50 border-t text-xs text-gray-500">
-                    {probe.baseUrl} — probed {new Date(probe.probedAt).toLocaleString()}
+                    {probe.env} · {probe.email} · {probe.baseUrl} — probed{" "}
+                    {new Date(probe.probedAt).toLocaleString()}
                   </div>
                 </div>
               )}

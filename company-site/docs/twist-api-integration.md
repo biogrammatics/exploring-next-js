@@ -160,6 +160,35 @@ no such resource; 401/403 means credentials or whitelist rather than the path.
 
 Must run on Render -- a local machine is not whitelisted.
 
+## Probe results (2026-09-04, staging / twist.sandbox@)
+
+| resource | status | meaning |
+|---|---|---|
+| `/orders/` | 200 `array[0]` | **exists and is readable** -- empty because the sandbox has never ordered |
+| `/quotes/` | 405 | exists, GET not allowed (POST-only: create a quote) |
+| `/invoices/` | 403 | exists, listing not permitted |
+| `/constructs/` | 403 | exists, POST works, listing not permitted |
+| `/shipments/` | 404 | no such resource |
+| `/order_items/` | 404 | no such resource |
+| `/carts/` | 404 | no such resource |
+
+So order retrieval **is** available, contrary to what the public API page
+implies. The remaining question is scope, not existence.
+
+Two things stand between this and real history:
+
+1. **Production credentials.** Set the `TWIST_PROD_*` vars in Render.
+2. **Which user owns the orders.** The path is `/v1/users/{email}/orders/`,
+   and historical orders were placed under `twist@biogrammatics.com` through
+   the web UI, not by the API account. Whether they are visible to
+   `twist.production@` is untested -- the email override on the test page
+   exists to answer that.
+
+Note 403 rather than 404 on `/constructs/` is informative: the resource is
+real and POST works, so 403 means listing is withheld by permission, not that
+the endpoint is missing. If `/orders/` behaves the same way for another
+user's orders, expect 403 rather than an empty array.
+
 ## Next Steps
 
 - [ ] Load BioGrammatics' actual vectors into the `twist.sandbox@biogrammatics.com` account
