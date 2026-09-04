@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 
+interface ProbeResult {
+  probedAt: string;
+  baseUrl: string;
+  results: { path: string; status: number; shape: string }[];
+}
+
 interface ApiResult {
   status: number;
   data: unknown;
@@ -24,6 +30,9 @@ export default function TwistTestPage() {
   const [sequence, setSequence] = useState(SAMPLE_SEQUENCE);
   const [constructName, setConstructName] = useState("TEST_Clonal");
   const [constructId, setConstructId] = useState("");
+  const [resourcePath, setResourcePath] = useState("orders/");
+  const [resourceQuery, setResourceQuery] = useState("");
+  const [probe, setProbe] = useState<ProbeResult | null>(null);
 
   async function runStep(key: string, fn: () => Promise<ApiResult>) {
     setLoading(key);
@@ -121,6 +130,23 @@ export default function TwistTestPage() {
         `/api/twist/constructs/describe?id=${constructId}`
       );
       return res.json();
+    });
+
+  const probeEndpoints = () =>
+    runStep("probe", async () => {
+      const res = await fetch("/api/twist/probe");
+      const json = await res.json();
+      if (Array.isArray(json?.results)) setProbe(json as ProbeResult);
+      return { status: res.status, data: json };
+    });
+
+  const fetchResource = () =>
+    runStep("resource", async () => {
+      const params = new URLSearchParams({ path: resourcePath });
+      if (resourceQuery.trim()) params.set("query", resourceQuery.trim());
+      const res = await fetch(`/api/twist/resource?${params}`);
+      const json = await res.json();
+      return { status: json.status ?? res.status, data: json.data ?? json };
     });
 
   return (
@@ -282,6 +308,132 @@ export default function TwistTestPage() {
             </button>
           </div>
           <ResultDisplay result={results.score} />
+        </Section>
+
+        {/* Step 4: Past Orders */}
+        <Section title="Step 4: Past Orders" step="4">
+          <p className="text-sm text-gray-600 mb-4">
+            Order retrieval is <strong>undocumented</strong> — Twist&apos;s public
+            API page describes design, scoring and order <em>placement</em>, not
+            retrieval. So this discovers rather than assumes: probe which
+            resources exist under <code className="font-mono">/v1/users/{"{email}"}/</code>,
+            then fetch whichever one responds.
+          </p>
+
+          <div className="space-y-5">
+            <div>
+              <button
+                onClick={probeEndpoints}
+                disabled={loading !== null}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loading === "probe" ? "Probing..." : "Probe Order Endpoints"}
+              </button>
+              <p className="text-xs text-gray-500 mt-2">
+                Read-only GETs against orders/, quotes/, shipments/,
+                order_items/, carts/, invoices/, constructs/. A 404 means no
+                such resource; 401/403 points at credentials or the IP
+                whitelist rather than the path.
+              </p>
+
+              {probe && (
+                <div className="mt-4 border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-left">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Resource</th>
+                        <th className="px-3 py-2 font-medium w-20">Status</th>
+                        <th className="px-3 py-2 font-medium">Response shape</th>
+                        <th className="px-3 py-2 w-16"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {probe.results.map((r) => {
+                        const ok = r.status >= 200 && r.status < 300;
+                        return (
+                          <tr key={r.path} className="border-t">
+                            <td className="px-3 py-2 font-mono">{r.path}</td>
+                            <td className="px-3 py-2">
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                  ok
+                                    ? "bg-green-50 text-green-700 border border-green-200"
+                                    : r.status === 404
+                                      ? "bg-gray-100 text-gray-600 border border-gray-200"
+                                      : "bg-red-50 text-red-700 border border-red-200"
+                                }`}
+                              >
+                                {r.status || "ERR"}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 font-mono text-xs text-gray-600 break-all">
+                              {r.shape}
+                            </td>
+                            <td className="px-3 py-2">
+                              {ok && (
+                                <button
+                                  onClick={() => setResourcePath(r.path.replace(/^\//, ""))}
+                                  className="text-blue-600 hover:underline text-xs"
+                                >
+                                  use
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="px-3 py-2 bg-gray-50 border-t text-xs text-gray-500">
+                    {probe.baseUrl} — probed {new Date(probe.probedAt).toLocaleString()}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t pt-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Resource path
+                  </label>
+                  <input
+                    type="text"
+                    value={resourcePath}
+                    onChange={(e) => setResourcePath(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 font-mono text-sm"
+                    placeholder="orders/"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Query string <span className="text-gray-400">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={resourceQuery}
+                    onChange={(e) => setResourceQuery(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 font-mono text-sm"
+                    placeholder="limit=10"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Relative to <code className="font-mono">/v1/users/{"{email}"}/</code>.
+                Try a known order number once a resource responds, e.g.{" "}
+                <code className="font-mono">orders/Q-717600/</code> — that order
+                is 12 A-Life fragments placed 2026-09-03.
+              </p>
+              <button
+                onClick={fetchResource}
+                disabled={loading !== null || !resourcePath.trim()}
+                className="mt-3 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loading === "resource" ? "Fetching..." : "Fetch Resource"}
+              </button>
+              <ResultDisplay result={results.resource} />
+            </div>
+          </div>
         </Section>
       </div>
     </div>

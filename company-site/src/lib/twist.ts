@@ -93,6 +93,85 @@ export async function testConnection() {
   };
 }
 
+/**
+ * Probe for order-related endpoints.
+ *
+ * The documented integration covers design-time scoring only (vectors,
+ * constructs, describe). Whether the API also exposes order history,
+ * quotes or shipments is undocumented -- Twist's marketing describes the
+ * API as design + order placement, and does not mention retrieval.
+ *
+ * Every known endpoint follows /v1/users/{email}/<resource>/, so probing is
+ * cheap: read-only GETs against candidate resource names. 404 means the
+ * resource does not exist; 200 means it does; 401/403 means the credentials
+ * or IP whitelist are the problem rather than the path.
+ *
+ * Run from Render -- Twist whitelists Render's IPs, not a local machine.
+ */
+export async function probeOrderEndpoints() {
+  const candidates = [
+    "/orders/",
+    "/quotes/",
+    "/shipments/",
+    "/order_items/",
+    "/carts/",
+    "/invoices/",
+    "/constructs/",
+  ];
+
+  const results = await Promise.all(
+    candidates.map(async (path) => {
+      try {
+        const res = await fetch(userPath(path), { headers: getHeaders() });
+        const text = await res.text();
+        let shape: string;
+        try {
+          const parsed = JSON.parse(text);
+          shape = Array.isArray(parsed)
+            ? `array[${parsed.length}] keys=${Object.keys(parsed[0] ?? {}).slice(0, 12).join(",")}`
+            : `object keys=${Object.keys(parsed).slice(0, 12).join(",")}`;
+        } catch {
+          shape = text.slice(0, 120) || "(empty)";
+        }
+        return { path, status: res.status, shape };
+      } catch (error) {
+        return {
+          path,
+          status: 0,
+          shape: error instanceof Error ? error.message : "fetch failed",
+        };
+      }
+    })
+  );
+
+  return { probedAt: new Date().toISOString(), baseUrl: TWIST_API_BASE_URL, results };
+}
+
+/**
+ * Fetch any resource under /v1/users/{email}/.
+ *
+ * Order retrieval is undocumented, so the resource name is a parameter rather
+ * than hard-coded: probeOrderEndpoints() finds what exists, this fetches it,
+ * and neither needs a redeploy to try a different guess.
+ *
+ * The path is constrained to a plain resource path -- no scheme, host, dot
+ * segments or query string -- so it cannot be pointed at another origin.
+ */
+export async function getUserResource(resourcePath: string, query?: string) {
+  const clean = resourcePath.replace(/^\/+/, "");
+  if (!/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\/?$/.test(clean)) {
+    return {
+      status: 400,
+      data: { error: `Invalid resource path: ${resourcePath}` },
+    };
+  }
+  const suffix = query ? `?${new URLSearchParams(query).toString()}` : "";
+  const res = await fetch(userPath(`/${clean}${suffix}`), {
+    headers: getHeaders(),
+  });
+  return parseResponse(res);
+}
+
 /** Step 1: Get available vectors and insertion points */
 export async function getVectors() {
   const res = await fetch(userPath("/vectors/"), { headers: getHeaders() });

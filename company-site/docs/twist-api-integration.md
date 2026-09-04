@@ -135,6 +135,31 @@ TWIST_END_USER_TOKEN=eyJ...
 
 Note: `TWIST_AUTH_TOKEN` needs the `JWT ` prefix. `TWIST_END_USER_TOKEN` is just the raw token.
 
+## Credential status
+
+**Verified working 2026-09-04.** A protein sequence codon-optimized on the
+Render deployment was scored end to end and returned STANDARD
+synthesizability. So the JWTs issued 2026-03-09 are still valid, the IP
+whitelist still covers Render, and both auth headers are accepted.
+
+Tokens were delivered via single-use links and have no documented rotation
+policy, so treat a sudden 401 as expiry rather than a code fault.
+
+## Open question: does the API expose ORDER data?
+
+The integration above is design-time only. Whether the API can also return
+order history, quotes or shipments is undocumented -- Twist's public API page
+describes design, scoring, codon optimization and order *placement*, and does
+not mention retrieval.
+
+`probeOrderEndpoints()` in `src/lib/twist.ts` and the admin route at
+`/api/twist/probe` answer this: read-only GETs against `orders/`, `quotes/`,
+`shipments/`, `order_items/`, `carts/`, `invoices/` under the same
+`/v1/users/{email}/` pattern, reporting status and response shape. 404 means
+no such resource; 401/403 means credentials or whitelist rather than the path.
+
+Must run on Render -- a local machine is not whitelisted.
+
 ## Next Steps
 
 - [ ] Load BioGrammatics' actual vectors into the `twist.sandbox@biogrammatics.com` account
