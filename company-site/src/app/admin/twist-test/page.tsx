@@ -10,6 +10,22 @@ interface ProbeResult {
   results: { path: string; status: number; shape: string }[];
 }
 
+interface TwistEnvConfig {
+  configured: boolean;
+  email: string;
+  baseUrl: string;
+  hostLooksLikeStaging: boolean;
+  authTokenSet: boolean;
+  authTokenHasJwtPrefix: boolean;
+  endUserTokenSet: boolean;
+}
+
+interface TwistConfig {
+  staging: TwistEnvConfig;
+  production: TwistEnvConfig;
+  warnings: string[];
+}
+
 interface ApiResult {
   status: number;
   data: unknown;
@@ -37,6 +53,7 @@ export default function TwistTestPage() {
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [twistEnv, setTwistEnv] = useState<"staging" | "production">("staging");
   const [emailOverride, setEmailOverride] = useState("");
+  const [config, setConfig] = useState<TwistConfig | null>(null);
 
   async function runStep(key: string, fn: () => Promise<ApiResult>) {
     setLoading(key);
@@ -134,6 +151,14 @@ export default function TwistTestPage() {
         `/api/twist/constructs/describe?id=${constructId}`
       );
       return res.json();
+    });
+
+  const loadConfig = () =>
+    runStep("config", async () => {
+      const res = await fetch("/api/twist/config");
+      const json = await res.json();
+      if (json?.staging) setConfig(json as TwistConfig);
+      return { status: res.status, data: json };
     });
 
   function scopeParams() {
@@ -333,14 +358,65 @@ export default function TwistTestPage() {
             Re-probe after changing scope below.
           </p>
 
+          <div className="mb-5 border rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold">Which account is configured?</h3>
+              <button
+                onClick={loadConfig}
+                disabled={loading !== null}
+                className="text-xs bg-gray-700 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 disabled:opacity-50"
+              >
+                {loading === "config" ? "Checking..." : "Check Config"}
+              </button>
+            </div>
+            <p className="text-xs text-gray-600">
+              There are <strong>three</strong> Twist accounts:{" "}
+              <code className="font-mono">twist@</code> (the real ordering
+              account — all 28 historical orders, web UI only),{" "}
+              <code className="font-mono">twist.sandbox@</code> and{" "}
+              <code className="font-mono">twist.production@</code> (both created
+              for API access in early 2026, neither has ever placed an order).
+              The env var <em>names</em> need not match the account they hold,
+              so read rather than assume.
+            </p>
+            {config && (
+              <div className="mt-3 space-y-2">
+                {(["staging", "production"] as const).map((e) => {
+                  const c = config[e];
+                  return (
+                    <div key={e} className="text-xs font-mono flex flex-wrap gap-x-3 gap-y-1 items-center border-t pt-2">
+                      <span className="font-sans font-medium w-20">{e}</span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded ${c.configured ? "bg-green-50 text-green-700 border border-green-200" : "bg-gray-100 text-gray-500 border border-gray-200"}`}
+                      >
+                        {c.configured ? "tokens set" : "no tokens"}
+                      </span>
+                      <span>{c.email}</span>
+                      <span className="text-gray-500">→ {c.baseUrl}</span>
+                    </div>
+                  );
+                })}
+                {config.warnings.length > 0 && (
+                  <ul className="mt-2 text-xs text-red-700 list-disc pl-5 space-y-1">
+                    {config.warnings.map((w) => (
+                      <li key={w}>{w}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="mb-5 p-4 bg-amber-50 border border-amber-200 rounded-lg">
             <p className="text-xs text-amber-900 mb-3">
-              <strong>Orders exist but are account-scoped.</strong> The sandbox
-              has never placed an order, so <code className="font-mono">/orders/</code>{" "}
-              correctly returns an empty array there. Real history needs the
-              production account — and possibly{" "}
-              <code className="font-mono">twist@biogrammatics.com</code>, which
-              is where orders were actually placed through the web UI.
+              <strong>Orders exist but are account-scoped.</strong> Neither API
+              account has ever placed an order, so an empty{" "}
+              <code className="font-mono">/orders/</code> array is the correct
+              answer for both. The 28 real orders belong to{" "}
+              <code className="font-mono">twist@biogrammatics.com</code> — set
+              that as the email override to find out whether they are visible
+              cross-account. Note tokens are <em>host-scoped</em>: a staging
+              token will not authenticate against the production host.
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div>
