@@ -95,6 +95,12 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Set when a team member signed in through an owner's AuthorizedEmail.
+  // Such sessions act on the owner's data but never inherit the owner's
+  // role and cannot change account identity (email, team membership).
+  isTeamLogin  Boolean  @default(false)
+  teamEmail    String?
 }
 
 model VerificationToken {
@@ -1262,7 +1268,9 @@ enum CodonOptimizationStatus {
 }
 
 model CodonOptimizationJob {
-  id        String                   @id @default(cuid())
+  // uuid(): guest jobs are readable by anyone holding the id, so it must be
+  // unguessable (cuid embeds a timestamp + counter and is enumerable).
+  id        String                   @id @default(uuid())
   status    CodonOptimizationStatus  @default(PENDING)
 
   // Input

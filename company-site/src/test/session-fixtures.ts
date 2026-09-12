@@ -14,6 +14,7 @@ export function makeSession(
       id: "user_1",
       email: "user@example.com",
       role,
+      isTeamLogin: false,
       ...overrides,
     },
     expires: "2999-01-01T00:00:00.000Z",
@@ -29,4 +30,10 @@ export const adminSession = makeSession("ADMIN", {
 export const superAdminSession = makeSession("SUPER_ADMIN", {
   id: "super_1",
   email: "super@example.com",
+});
+/** A colleague signed in through an admin owner's authorized email. */
+export const teamLoginSession = makeSession("ADMIN", {
+  id: "admin_1",
+  email: "colleague@example.com",
+  isTeamLogin: true,
 });
