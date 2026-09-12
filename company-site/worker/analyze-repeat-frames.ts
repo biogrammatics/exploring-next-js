@@ -251,7 +251,7 @@ async function main() {
   }> = [];
 
   // Also check: for same-AA repeats, how long are the amino acid repeat stretches?
-  let aaRepeatLengths: number[] = [];
+  const aaRepeatLengths: number[] = [];
 
   for (const entry of flagged) {
     // Get the insert DNA sequence (use from FASTA if available, fallback to CSV)
@@ -430,7 +430,7 @@ async function main() {
   console.log('='.repeat(90));
 
   // Re-analyze just the diff-AA pairs
-  let diffAAPairs: Array<{
+  const diffAAPairs: Array<{
     kmer: string;
     aa1: string;
     aa2: string;

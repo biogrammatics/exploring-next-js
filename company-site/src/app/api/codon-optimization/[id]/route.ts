@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { isAdminRole } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 
 interface RouteContext {
@@ -12,7 +13,16 @@ interface RouteContext {
  * Access rules:
  *  - Authenticated user: must own the job (job.userId matches session)
  *  - Admin/Super Admin: can view any job
- *  - Guest jobs (no userId): accessible by job ID (link shared via notification email)
+ *  - Guest jobs (no userId): accessible by job ID. The id is a random uuid()
+ *    (see prisma/schema.prisma) and is the only credential a guest holds, so
+ *    it must stay unguessable and must never be logged or exposed in listings.
+ *    This bypass applies ONLY to jobs with no userId: a signed-in user's job
+ *    (and its sequences) must never be returned to anyone but the owner or an
+ *    admin, even when the caller knows the id.
+ *
+ * While a job is PENDING/PROCESSING the client polls this endpoint every few
+ * seconds and only renders sequences after completion, so `proteinSequence`
+ * and `dnaSequence` are omitted from the payload until status is COMPLETED.
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
@@ -53,8 +63,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (job.userId) {
       const isOwner = session?.user?.id === job.userId;
       const isAdmin =
-        session?.user?.role === "ADMIN" ||
-        session?.user?.role === "SUPER_ADMIN";
+        !!session?.user &&
+        !session.user.isTeamLogin &&
+        isAdminRole(session.user.role);
       if (!isOwner && !isAdmin) {
         // Return 404 instead of 403 to avoid revealing job existence
         return NextResponse.json(
@@ -63,8 +74,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
         );
       }
     }
-    // Guest jobs (no userId) remain accessible via job ID — the UUID
-    // in the notification email link serves as the access token
+    // Guest jobs (no userId) remain accessible via job ID: the random uuid
+    // in the notification email link is the access token (see header comment).
 
     // Calculate stats if completed
     let stats = null;
@@ -79,11 +90,16 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     // Strip userId from response — internal field
-    const { userId: _userId, ...jobData } = job;
+    const { userId: _userId, proteinSequence, dnaSequence, ...jobData } = job;
+
+    // Sequences are only useful once the job is done; drop them from the
+    // polling payload until then (dnaSequence is null before completion anyway).
+    const isCompleted = job.status === "COMPLETED";
 
     return NextResponse.json({
       job: {
         ...jobData,
+        ...(isCompleted ? { proteinSequence, dnaSequence } : {}),
         stats,
       },
     });

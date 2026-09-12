@@ -47,6 +47,14 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // Configuration
 const POLL_INTERVAL_MS = 5000; // 5 seconds
 const BEAM_WIDTH = 100;
+// A PROCESSING job older than this is assumed orphaned (worker crashed or was
+// killed mid-job) and is returned to the queue.
+const STALE_JOB_MS = 30 * 60 * 1000; // 30 minutes
+const STALE_SWEEP_EVERY_POLLS = 60; // ~5 minutes at the default poll interval
+const SHUTDOWN_GRACE_MS = 60 * 1000;
+
+// Set by SIGTERM/SIGINT; the main loop exits after the current job finishes.
+let shuttingDown = false;
 
 // Global optimizer instances (loaded once at startup)
 let dpOptimizer: DPCodonOptimizer | null = null;
@@ -104,6 +112,12 @@ function preprocessProteinSequence(sequence: string): {
   // Remove whitespace and convert to uppercase
   let processed = sequence.replace(/\s/g, "").toUpperCase();
 
+  // The API strips a single trailing stop codon before storing, but jobs
+  // queued before that change may still carry one. Tolerate it here too.
+  if (processed.endsWith("*")) {
+    processed = processed.slice(0, -1);
+  }
+
   // Handle ambiguous amino acids
   const processed_chars: string[] = [];
   for (const aa of processed) {
@@ -123,12 +137,14 @@ function preprocessProteinSequence(sequence: string): {
       case "O": // Pyrrolysine -> Lysine
         processed_chars.push("K");
         break;
-      case "X": // Unknown -> random standard AA
+      case "X": {
+        // Unknown -> random standard AA
         const standardAAs = "ACDEFGHIKLMNPQRSTVWY";
         processed_chars.push(
           standardAAs[Math.floor(Math.random() * standardAAs.length)]
         );
         break;
+      }
       default:
         // Standard amino acids
         if ("ACDEFGHIKLMNPQRSTVWY".includes(aa)) {
@@ -479,17 +495,57 @@ async function scoreTwist(
 // WORKER LOGIC
 // ============================================================================
 
+/**
+ * Atomically claim a PENDING job. Returns false if another worker got there
+ * first (the conditional updateMany matched zero rows).
+ */
+async function claimJob(jobId: string): Promise<boolean> {
+  const { count } = await prisma.codonOptimizationJob.updateMany({
+    where: { id: jobId, status: "PENDING" },
+    data: { status: "PROCESSING", startedAt: new Date() },
+  });
+  return count === 1;
+}
+
+/**
+ * Return orphaned PROCESSING jobs (worker died mid-job) to the queue.
+ */
+async function requeueStaleJobs(): Promise<void> {
+  try {
+    const { count } = await prisma.codonOptimizationJob.updateMany({
+      where: {
+        status: "PROCESSING",
+        startedAt: { lt: new Date(Date.now() - STALE_JOB_MS) },
+      },
+      data: { status: "PENDING", startedAt: null },
+    });
+    if (count > 0) {
+      console.log(
+        `[${new Date().toISOString()}] Requeued ${count} stale PROCESSING job(s) older than ${STALE_JOB_MS / 60000} min`
+      );
+    }
+  } catch (error) {
+    console.error(
+      `[${new Date().toISOString()}] Error sweeping stale jobs:`,
+      error
+    );
+  }
+}
+
 async function processJob(jobId: string): Promise<void> {
+  // Claim first; if another worker instance won the race, skip silently.
+  if (!(await claimJob(jobId))) {
+    console.log(
+      `[${new Date().toISOString()}] Job ${jobId} already claimed by another worker, skipping`
+    );
+    return;
+  }
+
   console.log(`[${new Date().toISOString()}] Processing job: ${jobId}`);
 
   try {
-    // Mark job as processing
-    const job = await prisma.codonOptimizationJob.update({
+    const job = await prisma.codonOptimizationJob.findUniqueOrThrow({
       where: { id: jobId },
-      data: {
-        status: "PROCESSING",
-        startedAt: new Date(),
-      },
     });
 
     // Build per-job exclusion patterns from stored patterns
@@ -673,25 +729,49 @@ async function main(): Promise<void> {
   loadOptimizers();
   console.log(`[${new Date().toISOString()}] Optimizers initialized (DP primary, beam search fallback)`);
 
+  // Recover anything a previous instance left half-finished
+  await requeueStaleJobs();
+
   // Main loop
-  while (true) {
+  let polls = 0;
+  while (!shuttingDown) {
     await pollForJobs();
+    if (shuttingDown) break;
+    polls += 1;
+    if (polls % STALE_SWEEP_EVERY_POLLS === 0) {
+      await requeueStaleJobs();
+    }
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
+
+  console.log(`[${new Date().toISOString()}] Worker loop exited, disconnecting`);
+  await prisma.$disconnect();
+  process.exit(0);
 }
 
-// Handle graceful shutdown
-process.on("SIGTERM", async () => {
-  console.log(`[${new Date().toISOString()}] Received SIGTERM, shutting down...`);
-  await prisma.$disconnect();
-  process.exit(0);
-});
+// Handle graceful shutdown: let the in-flight job finish (the main loop checks
+// the flag), but hard-exit if it does not wrap up within the grace period.
+function requestShutdown(signal: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(
+    `[${new Date().toISOString()}] Received ${signal}, finishing current job then shutting down (hard exit in ${SHUTDOWN_GRACE_MS / 1000}s)...`
+  );
+  const timer = setTimeout(async () => {
+    console.error(
+      `[${new Date().toISOString()}] Shutdown grace period elapsed, exiting now`
+    );
+    try {
+      await prisma.$disconnect();
+    } finally {
+      process.exit(1);
+    }
+  }, SHUTDOWN_GRACE_MS);
+  timer.unref();
+}
 
-process.on("SIGINT", async () => {
-  console.log(`[${new Date().toISOString()}] Received SIGINT, shutting down...`);
-  await prisma.$disconnect();
-  process.exit(0);
-});
+process.on("SIGTERM", () => requestShutdown("SIGTERM"));
+process.on("SIGINT", () => requestShutdown("SIGINT"));
 
 // Start the worker
 main().catch((error) => {

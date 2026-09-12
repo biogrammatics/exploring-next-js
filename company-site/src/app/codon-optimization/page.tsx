@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 interface JobStatus {
   id: string;
   status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  /** Only present once status is COMPLETED (omitted from polling payloads). */
   proteinSequence: string;
   proteinName: string | null;
   targetOrganism: string;
@@ -579,7 +580,7 @@ export default function CodonOptimizationPage() {
                 htmlFor="notificationEmail"
                 className="block text-sm font-medium text-gray-700 mb-2"
               >
-                Email for Notification (optional)
+                Email for Notification (required unless signed in)
               </label>
               <input
                 type="email"
@@ -590,7 +591,8 @@ export default function CodonOptimizationPage() {
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <p className="text-sm text-gray-500 mt-1">
-                Receive an email when your optimization is complete
+                Receive an email when your optimization is complete. Guests
+                must provide one; it is the only way to get your results link.
               </p>
             </div>
 

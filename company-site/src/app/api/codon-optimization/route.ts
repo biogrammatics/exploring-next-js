@@ -1,7 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { validateProteinSequence } from "@/lib/codon-optimization";
+import {
+  validateProteinSequence,
+  validateExclusionPattern,
+  MAX_PROTEIN_LENGTH,
+  MAX_EXCLUSION_PATTERNS,
+} from "@/lib/codon-optimization";
+import { isValidEmail, normalizeEmail } from "@/lib/identity";
+
+/**
+ * Raw request-body cap for the protein sequence, applied before the (O(n))
+ * cleaning/validation pass. Allows headroom for whitespace, digits and line
+ * numbering in pasted FASTA-style input.
+ */
+const MAX_RAW_SEQUENCE_CHARS = Math.floor(MAX_PROTEIN_LENGTH * 1.5);
+const MAX_PROTEIN_NAME_LENGTH = 200;
+
+/** Strip C0/C1 control characters (the name ends up in an email subject). */
+function sanitizeProteinName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const stripped = value.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+  if (stripped.length === 0) return null;
+  return stripped.slice(0, MAX_PROTEIN_NAME_LENGTH);
+}
 
 /**
  * POST /api/codon-optimization
@@ -18,12 +40,22 @@ export async function POST(request: NextRequest) {
       targetOrganism = "pichia",
       notificationEmail,
       excludedPatterns,
-    } = body;
+    } = body ?? {};
 
     // Validate required fields
     if (!proteinSequence || typeof proteinSequence !== "string") {
       return NextResponse.json(
         { error: "Protein sequence is required" },
+        { status: 400 }
+      );
+    }
+
+    // Cheap early exit before running the cleaning pass on a huge payload
+    if (proteinSequence.length > MAX_RAW_SEQUENCE_CHARS) {
+      return NextResponse.json(
+        {
+          error: `Protein sequence is too long. Maximum is ${MAX_PROTEIN_LENGTH.toLocaleString()} amino acids.`,
+        },
         { status: 400 }
       );
     }
@@ -41,18 +73,77 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate excluded patterns if provided
-    const patterns: string[] = Array.isArray(excludedPatterns)
-      ? excludedPatterns.filter((p: unknown) => typeof p === "string" && p.length > 0)
-      : [];
+    if (typeof targetOrganism !== "string" || targetOrganism.length > 50) {
+      return NextResponse.json(
+        { error: "Invalid target organism" },
+        { status: 400 }
+      );
+    }
+
+    // Validate excluded patterns if provided. Patterns are compiled to regex by
+    // the worker and stored comma-joined, so each must pass the safe-alphabet
+    // check in validateExclusionPattern.
+    let patterns: string[] = [];
+    if (excludedPatterns !== undefined && excludedPatterns !== null) {
+      if (!Array.isArray(excludedPatterns)) {
+        return NextResponse.json(
+          { error: "excludedPatterns must be an array of strings" },
+          { status: 400 }
+        );
+      }
+      if (excludedPatterns.length > MAX_EXCLUSION_PATTERNS) {
+        return NextResponse.json(
+          { error: `At most ${MAX_EXCLUSION_PATTERNS} exclusion patterns are allowed` },
+          { status: 400 }
+        );
+      }
+      for (const raw of excludedPatterns) {
+        const check = validateExclusionPattern(raw);
+        if (!check.ok) {
+          const shown =
+            typeof raw === "string" ? raw.slice(0, 80) : String(raw);
+          return NextResponse.json(
+            { error: `Invalid exclusion pattern "${shown}": ${check.reason}` },
+            { status: 400 }
+          );
+        }
+      }
+      patterns = excludedPatterns as string[];
+    }
+
+    // Notification email: optional for signed-in users (falls back to the
+    // account email), required for guests (it is the only way they get the
+    // result link).
+    let storedEmail: string | null = null;
+    if (notificationEmail !== undefined && notificationEmail !== null && notificationEmail !== "") {
+      if (!isValidEmail(notificationEmail)) {
+        return NextResponse.json(
+          { error: "Invalid notification email address" },
+          { status: 400 }
+        );
+      }
+      storedEmail = normalizeEmail(notificationEmail);
+    } else if (session?.user?.email) {
+      storedEmail = normalizeEmail(session.user.email);
+    }
+
+    if (!session?.user && !storedEmail) {
+      return NextResponse.json(
+        {
+          error:
+            "A notification email is required to submit a job without signing in",
+        },
+        { status: 400 }
+      );
+    }
 
     // Create the job
     const job = await prisma.codonOptimizationJob.create({
       data: {
         proteinSequence: validation.cleanedSequence,
-        proteinName: proteinName || null,
+        proteinName: sanitizeProteinName(proteinName),
         targetOrganism,
-        notificationEmail: notificationEmail || session?.user?.email || null,
+        notificationEmail: storedEmail,
         userId: session?.user?.id || null,
         status: "PENDING",
         excludedEnzymeNames:

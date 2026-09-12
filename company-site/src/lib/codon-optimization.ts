@@ -56,6 +56,108 @@ const VALID_SEQUENCE_CHARS = new Set([
   'O',  // Pyrrolysine (rare, treat as K)
 ]);
 
+/** Hard upper bound on accepted protein length (amino acids). Longer input is rejected. */
+export const MAX_PROTEIN_LENGTH = 10000;
+/** Above this length we accept the sequence but warn that processing will be slow. */
+export const LONG_PROTEIN_WARNING_LENGTH = 5000;
+
+/**
+ * Exclusion-pattern validator for user-supplied restriction-site patterns.
+ *
+ * Patterns are compiled into a RegExp by the worker's optimizers and stored
+ * comma-joined, so we allow only a non-backtracking subset: IUPAC nucleotide
+ * codes, character classes `[...]`, and bounded quantifiers `{n}` (`{n,m}` is
+ * excluded because the comma is the storage separator). Alternation, unbounded
+ * repetition, anchors, wildcards, escapes, and commas are rejected. This keeps
+ * e.g. `CAC[ACGT]{4}GTG` (AleI) working.
+ */
+export const MAX_EXCLUSION_PATTERN_LENGTH = 64;
+export const MAX_EXCLUSION_PATTERNS = 50;
+const EXCLUSION_PATTERN_ALPHABET = /^[ACGTURYKMSWBDHVNacgturykmswbdhvn\[\]{}0-9]+$/;
+
+export type ExclusionPatternCheck = { ok: true } | { ok: false; reason: string };
+
+export function validateExclusionPattern(pattern: unknown): ExclusionPatternCheck {
+  if (typeof pattern !== 'string' || pattern.length === 0) {
+    return { ok: false, reason: 'Pattern must be a non-empty string' };
+  }
+  if (pattern.length > MAX_EXCLUSION_PATTERN_LENGTH) {
+    return {
+      ok: false,
+      reason: `Pattern exceeds ${MAX_EXCLUSION_PATTERN_LENGTH} characters`,
+    };
+  }
+  if (pattern.includes(',')) {
+    return { ok: false, reason: 'Pattern must not contain a comma' };
+  }
+  if (!EXCLUSION_PATTERN_ALPHABET.test(pattern)) {
+    return {
+      ok: false,
+      reason:
+        'Pattern may only contain IUPAC nucleotide codes, character classes [..] and bounded quantifiers {n}; regex operators ( ) + * ? | . ^ $ \\ are not allowed',
+    };
+  }
+  // Structural check: brackets/braces must be balanced, non-nested, and a
+  // brace group must be a bounded quantifier {n} following a base or
+  // character class.
+  let depthSq = 0;
+  let inBrace = false;
+  let braceBody = '';
+  let prevWasAtom = false;
+  for (const ch of pattern) {
+    if (inBrace) {
+      if (ch === '}') {
+        if (!/^\d+$/.test(braceBody)) {
+          return { ok: false, reason: `Malformed quantifier {${braceBody}}` };
+        }
+        inBrace = false;
+        braceBody = '';
+        prevWasAtom = false;
+        continue;
+      }
+      braceBody += ch;
+      continue;
+    }
+    if (depthSq > 0) {
+      if (ch === '[') return { ok: false, reason: 'Nested character class' };
+      if (ch === ']') {
+        depthSq = 0;
+        prevWasAtom = true;
+        continue;
+      }
+      if (ch === '{' || ch === '}' || /\d/.test(ch)) {
+        return { ok: false, reason: 'Character class may only contain nucleotide codes' };
+      }
+      continue;
+    }
+    if (ch === '[') {
+      depthSq = 1;
+      continue;
+    }
+    if (ch === ']' || ch === '}') {
+      return { ok: false, reason: `Unbalanced '${ch}'` };
+    }
+    if (ch === '{') {
+      if (!prevWasAtom) return { ok: false, reason: 'Quantifier must follow a base or character class' };
+      inBrace = true;
+      continue;
+    }
+    if (/\d/.test(ch)) {
+      return { ok: false, reason: 'Digits are only allowed inside a {n} quantifier' };
+    }
+    prevWasAtom = true;
+  }
+  if (depthSq > 0 || inBrace) {
+    return { ok: false, reason: 'Unbalanced bracket or brace' };
+  }
+  try {
+    new RegExp(pattern);
+  } catch {
+    return { ok: false, reason: 'Pattern is not a valid expression' };
+  }
+  return { ok: true };
+}
+
 export interface ValidationResult {
   isValid: boolean;
   errors: string[];
@@ -80,7 +182,8 @@ export interface OptimizationResult {
  * Validate a protein sequence
  * - Removes whitespace and numbers
  * - Converts to uppercase
- * - Checks for invalid characters
+ * - Strips exactly one trailing `*` (conventional terminator)
+ * - Rejects internal stop codons, invalid characters, and over-long input
  */
 export function validateProteinSequence(sequence: string): ValidationResult {
   const errors: string[] = [];
@@ -91,6 +194,11 @@ export function validateProteinSequence(sequence: string): ValidationResult {
     .toUpperCase()
     .replace(/[\s\d\-\.]/g, '')
     .replace(/[^A-Z*]/g, '');
+
+  // Strip exactly one trailing stop codon; the worker adds its own terminator.
+  if (cleaned.endsWith('*')) {
+    cleaned = cleaned.slice(0, -1);
+  }
 
   if (cleaned.length === 0) {
     return {
@@ -126,15 +234,21 @@ export function validateProteinSequence(sequence: string): ValidationResult {
     warnings.push(`Sequence contains ambiguous amino acids that will be resolved: ${[...new Set(ambiguousChars)].join(', ')}`);
   }
 
-  // Check for internal stop codons
-  const stopCount = (cleaned.match(/\*/g) || []).length;
-  if (stopCount > 1) {
-    warnings.push(`Sequence contains ${stopCount} stop codons (*). Only the terminal one is typically expected.`);
+  // Any remaining `*` is an internal stop codon (the trailing one was stripped above)
+  const internalStop = cleaned.indexOf('*');
+  if (internalStop !== -1) {
+    errors.push(`Internal stop codon at position ${internalStop + 1}`);
   }
 
   // Check sequence length
-  if (cleaned.length > 10000) {
-    warnings.push('Sequence is very long (>10,000 aa). Processing may take longer.');
+  if (cleaned.length > MAX_PROTEIN_LENGTH) {
+    errors.push(
+      `Sequence is too long (${cleaned.length} aa). Maximum is ${MAX_PROTEIN_LENGTH.toLocaleString()} aa.`
+    );
+  } else if (cleaned.length > LONG_PROTEIN_WARNING_LENGTH) {
+    warnings.push(
+      `Sequence is very long (>${LONG_PROTEIN_WARNING_LENGTH.toLocaleString()} aa). Processing may take longer.`
+    );
   }
 
   return {
