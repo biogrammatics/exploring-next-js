@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireUser } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
+import { normalizeEmail } from "@/lib/identity";
 import { Resend } from "resend";
 import crypto from "crypto";
 
@@ -12,9 +13,17 @@ const TOKEN_EXPIRY_SECONDS = 24 * 60 * 60;
 // POST - Request email change
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const guard = await requireUser();
+    if (guard.response) return guard.response;
+    const { session } = guard;
+
+    // A colleague signed in through an owner's authorized email must not be
+    // able to re-point the owner's account at a different address.
+    if (session.user.isTeamLogin) {
+      return NextResponse.json(
+        { error: "Team members cannot change account settings" },
+        { status: 403 }
+      );
     }
 
     const { newEmail } = await request.json();
@@ -26,10 +35,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const normalizedEmail = newEmail.toLowerCase().trim();
+    const normalizedEmail = normalizeEmail(newEmail);
 
     // Validate it's different from current email
-    if (normalizedEmail === session.user.email.toLowerCase()) {
+    if (normalizedEmail === normalizeEmail(session.user.email)) {
       return NextResponse.json(
         { error: "New email must be different from your current email" },
         { status: 400 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { normalizeEmail } from "@/lib/identity";
 import { Resend } from "resend";
 import crypto from "crypto";
 
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = normalizeEmail(email);
 
     // Generate a secure token
     const token = crypto.randomBytes(32).toString("hex");

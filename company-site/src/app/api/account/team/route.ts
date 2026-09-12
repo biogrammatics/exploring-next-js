@@ -1,10 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireUser } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
+import { normalizeEmail } from "@/lib/identity";
 import { Resend } from "resend";
 import crypto from "crypto";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/**
+ * Team-login sessions (a colleague signed in via an owner's authorized email)
+ * may view the account but must not add or remove who else can access it.
+ */
+async function requireAccountOwner() {
+  const guard = await requireUser();
+  if (guard.response) return guard;
+  if (guard.session.user.isTeamLogin) {
+    return {
+      response: NextResponse.json(
+        { error: "Team members cannot change account settings" },
+        { status: 403 }
+      ),
+    };
+  }
+  return guard;
+}
 
 // GET - List all team emails for current user
 export async function GET() {
@@ -42,10 +64,9 @@ export async function GET() {
 // POST - Invite a new team email
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requireAccountOwner();
+    if (guard.response) return guard.response;
+    const { session } = guard;
 
     const { email } = await request.json();
 
@@ -56,7 +77,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = normalizeEmail(email);
 
     // Check if this email is already a primary account email
     const existingUser = await prisma.user.findUnique({
@@ -70,16 +91,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if this email is already authorized for this account
-    const existingAuthorized = await prisma.authorizedEmail.findFirst({
+    // (email, userId) is unique, so a previously REVOKED row for this pair
+    // still exists and must be revived rather than re-created (P2002).
+    const existingAuthorized = await prisma.authorizedEmail.findUnique({
       where: {
-        email: normalizedEmail,
-        userId: session.user.id,
-        status: { in: ["ACTIVE", "PENDING"] },
+        email_userId: { email: normalizedEmail, userId: session.user.id },
       },
     });
 
-    if (existingAuthorized) {
+    if (
+      existingAuthorized &&
+      (existingAuthorized.status === "ACTIVE" ||
+        existingAuthorized.status === "PENDING")
+    ) {
       return NextResponse.json(
         { error: "This email is already authorized or has a pending invitation" },
         { status: 400 }
@@ -104,18 +128,31 @@ export async function POST(request: NextRequest) {
 
     // Generate invitation token
     const inviteToken = crypto.randomBytes(32).toString("hex");
-    const inviteExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const inviteExpires = new Date(Date.now() + INVITE_TTL_MS);
 
-    // Create the authorized email record
-    const authorizedEmail = await prisma.authorizedEmail.create({
-      data: {
-        email: normalizedEmail,
-        userId: session.user.id,
-        status: "PENDING",
-        inviteToken,
-        inviteTokenExpires: inviteExpires,
-      },
-    });
+    // Create the authorized email record, or revive a REVOKED one as a fresh
+    // PENDING invitation.
+    const authorizedEmail = existingAuthorized
+      ? await prisma.authorizedEmail.update({
+          where: { id: existingAuthorized.id },
+          data: {
+            status: "PENDING",
+            inviteToken,
+            inviteTokenExpires: inviteExpires,
+            invitedAt: new Date(),
+            confirmedAt: null,
+            revokedAt: null,
+          },
+        })
+      : await prisma.authorizedEmail.create({
+          data: {
+            email: normalizedEmail,
+            userId: session.user.id,
+            status: "PENDING",
+            inviteToken,
+            inviteTokenExpires: inviteExpires,
+          },
+        });
 
     // Send invitation email - use request origin to ensure correct domain
     const protocol = request.headers.get("x-forwarded-proto") || "https";
@@ -154,10 +191,9 @@ export async function POST(request: NextRequest) {
 // DELETE - Revoke a team email
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requireAccountOwner();
+    if (guard.response) return guard.response;
+    const { session } = guard;
 
     const { searchParams } = new URL(request.url);
     const emailId = searchParams.get("id");

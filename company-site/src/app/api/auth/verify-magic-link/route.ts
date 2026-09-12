@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { normalizeEmail } from "@/lib/identity";
 import { cookies } from "next/headers";
 import crypto from "crypto";
 
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL("/auth/error?error=InvalidToken", baseUrl));
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = normalizeEmail(email);
 
     // Find the verification token
     const verificationToken = await prisma.verificationToken.findFirst({
@@ -56,42 +57,44 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Check if this is a team email login
-    const authorizedEmail = await prisma.authorizedEmail.findFirst({
-      where: {
-        email: normalizedEmail,
-        status: "ACTIVE",
-      },
-      include: {
-        user: true,
-      },
+    // Resolve the account. A primary User always wins: an address that is both
+    // a primary account AND someone else's authorized team email must land in
+    // its own account, never in the other person's. Only when no primary user
+    // exists do we consult ACTIVE AuthorizedEmail rows (team login). This is
+    // the same order check-email uses.
+    let user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
     });
-
-    let user;
     let isTeamLogin = false;
 
-    if (authorizedEmail) {
-      // Team email login - use the associated user account
-      user = authorizedEmail.user;
-      isTeamLogin = true;
-    } else {
-      // Primary email login - find or create user
-      user = await prisma.user.findUnique({
-        where: { email: normalizedEmail },
+    if (!user) {
+      const authorizedEmail = await prisma.authorizedEmail.findFirst({
+        where: {
+          email: normalizedEmail,
+          status: "ACTIVE",
+        },
+        include: {
+          user: true,
+        },
       });
 
-      if (!user) {
-        // Create new user
+      if (authorizedEmail) {
+        // Team email login - use the associated owner account
+        user = authorizedEmail.user;
+        isTeamLogin = true;
+      } else {
+        // Brand-new primary account
         user = await prisma.user.create({
           data: {
             email: normalizedEmail,
           },
         });
 
-        // Link any existing orders to this user
+        // Link any existing orders to this user. Legacy orders may have been
+        // stored with mixed-case addresses, so match insensitively.
         await prisma.order.updateMany({
           where: {
-            customerEmail: normalizedEmail,
+            customerEmail: { equals: normalizedEmail, mode: "insensitive" },
             userId: null,
           },
           data: { userId: user.id },
@@ -104,12 +107,16 @@ export async function GET(request: NextRequest) {
     const sessionToken = crypto.randomBytes(32).toString("hex");
     const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-    // Create the session in the database
+    // Create the session in the database. Team logins are flagged on the
+    // Session row so the auth adapter can strip elevated roles and block
+    // account-identity changes for the colleague's session.
     await prisma.session.create({
       data: {
         sessionToken,
         userId: user.id,
         expires,
+        isTeamLogin,
+        teamEmail: isTeamLogin ? normalizedEmail : null,
       },
     });
 

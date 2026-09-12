@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { normalizeEmail } from "@/lib/identity";
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,8 +13,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Normalize email to lowercase
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = normalizeEmail(email);
 
     // Check if this is a primary account email
     const existingUser = await prisma.user.findUnique({

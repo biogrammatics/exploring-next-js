@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
+import { normalizeEmail } from "@/lib/identity";
 import { Prisma } from "@/generated/prisma/client";
 import Stripe from "stripe";
 
@@ -23,7 +24,10 @@ async function handlePaidSession(tx: Tx, session: Stripe.Checkout.Session) {
   if (!orderId) return;
 
   const createAccount = session.metadata?.createAccount === "true";
-  const customerEmail = session.customer_details?.email ?? undefined;
+  // Normalize before any User lookup/creation so a mixed-case address from
+  // Stripe never creates a second User row for the same person.
+  const rawEmail = session.customer_details?.email;
+  const customerEmail = rawEmail ? normalizeEmail(rawEmail) : undefined;
 
   // Resolve (or create) the user without a check-then-create race: upsert.
   let userId: string | undefined;

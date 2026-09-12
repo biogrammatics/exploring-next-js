@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { normalizeEmail } from "@/lib/identity";
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,12 +43,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check if new email is still available
-    const existingUser = await prisma.user.findUnique({
-      where: { email: changeRequest.newEmail },
-    });
+    const newEmail = normalizeEmail(changeRequest.newEmail);
 
-    if (existingUser) {
+    // Check if new email is still available: it must not be another primary
+    // account, and it must not be an ACTIVE or PENDING team email anywhere
+    // (otherwise the same address would resolve to two different accounts).
+    const [existingUser, existingTeamEmail] = await Promise.all([
+      prisma.user.findUnique({
+        where: { email: newEmail },
+        select: { id: true },
+      }),
+      prisma.authorizedEmail.findFirst({
+        where: {
+          email: newEmail,
+          status: { in: ["ACTIVE", "PENDING"] },
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (existingUser || existingTeamEmail) {
       await prisma.emailChangeRequest.delete({
         where: { id: changeRequest.id },
       });
@@ -55,10 +70,6 @@ export async function GET(request: NextRequest) {
         new URL("/auth/error?error=EmailAlreadyInUse", request.url)
       );
     }
-
-    // Get old email for reference
-    const oldEmail = changeRequest.user.email;
-    const newEmail = changeRequest.newEmail;
 
     // Update the user's email
     await prisma.user.update({

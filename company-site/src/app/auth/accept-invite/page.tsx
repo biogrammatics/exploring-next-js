@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { normalizeEmail } from "@/lib/identity";
 import Link from "next/link";
 
 interface PageProps {
@@ -86,10 +87,47 @@ export default async function AcceptInvitePage({ searchParams }: PageProps) {
     );
   }
 
+  // Refuse to activate if the invited address has since become a primary
+  // account of its own. Sign-in resolves a primary User before any team
+  // email, so activating would silently grant access that can never be used
+  // and would leave the same address pointing at two accounts.
+  const invitedEmail = normalizeEmail(authorizedEmail.email);
+  const primaryUser = await prisma.user.findUnique({
+    where: { email: invitedEmail },
+    select: { id: true },
+  });
+
+  if (primaryUser) {
+    return (
+      <main className="min-h-screen flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center">
+          <div className="text-6xl mb-4">🚫</div>
+          <h1 className="text-3xl font-bold mb-2">Invitation Cannot Be Accepted</h1>
+          <p className="text-gray-600 mb-4">
+            <strong>{invitedEmail}</strong> already has its own BioGrammatics
+            account, so it cannot also be used as a team email for another
+            account.
+          </p>
+          <p className="text-gray-600 mb-6">
+            Sign in with your own account, or ask the account owner to invite a
+            different address.
+          </p>
+          <Link
+            href="/auth/signin"
+            className="text-blue-600 hover:underline"
+          >
+            Go to sign in
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   // Accept the invitation - update status
   await prisma.authorizedEmail.update({
     where: { id: authorizedEmail.id },
     data: {
+      email: invitedEmail,
       status: "ACTIVE",
       confirmedAt: new Date(),
       inviteToken: null,

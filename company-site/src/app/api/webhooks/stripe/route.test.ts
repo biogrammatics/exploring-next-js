@@ -188,6 +188,30 @@ describe("stripe webhook: payment gating", () => {
     expect(lastUpdateManyArg().data).toMatchObject({ userId: "user_new" });
   });
 
+  it("normalizes the customer email before looking up or creating the user", async () => {
+    stubEvent({
+      id: "evt_case",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          payment_status: "paid",
+          customer_details: { email: "  Mixed.Case@Example.COM " },
+          metadata: { orderId: "o1", createAccount: "true" },
+        },
+      },
+    });
+    await POST(makeRequest());
+    expect(tx.user.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { email: "mixed.case@example.com" },
+        create: expect.objectContaining({ email: "mixed.case@example.com" }),
+      })
+    );
+    expect(lastUpdateManyArg().data).toMatchObject({
+      customerEmail: "mixed.case@example.com",
+    });
+  });
+
   it("fulfills a delayed async_payment_succeeded the same way", async () => {
     stubEvent({
       id: "evt_async_ok",
