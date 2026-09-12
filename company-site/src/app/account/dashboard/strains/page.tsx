@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { PURCHASED_ORDER_STATUSES } from "@/lib/order-status";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -14,7 +15,7 @@ export default async function PurchasedStrainsPage() {
     where: {
       order: {
         userId: session.user.id,
-        status: { in: ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"] },
+        status: { in: [...PURCHASED_ORDER_STATUSES] },
       },
     },
     include: {

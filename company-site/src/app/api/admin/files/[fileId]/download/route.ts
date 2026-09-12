@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { isAdminRole } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { getSignedDownloadUrl } from "@/lib/s3";
+import { isVectorPublic } from "@/lib/visibility";
 
 interface RouteParams {
   params: Promise<{ fileId: string }>;
@@ -24,20 +26,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
 
     if (vectorFile) {
-      // Allow public download for available products
-      if (vectorFile.vector.productStatus?.isAvailable) {
+      // Public download for products that are public by the same rule the
+      // catalog uses (isPublic AND status available).
+      if (isVectorPublic(vectorFile.vector)) {
         const signedUrl = await getSignedDownloadUrl(vectorFile.s3Key, vectorFile.fileName, 3600);
         return NextResponse.redirect(signedUrl);
       }
 
       // Unavailable / unpublished products: admin only. A plain authenticated
-      // user must not be able to reach files for products that aren't public.
+      // user (or a team login on an admin's account) must not be able to reach
+      // files for products that aren't public.
       const session = await auth();
       if (!session?.user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
       const isAdmin =
-        session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN";
+        isAdminRole(session.user.role) && !session.user.isTeamLogin;
       if (!isAdmin) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
@@ -51,7 +55,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const isAdmin = session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN";
+    const isAdmin = isAdminRole(session.user.role) && !session.user.isTeamLogin;
     if (!isAdmin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

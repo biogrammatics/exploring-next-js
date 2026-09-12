@@ -1,24 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
+import { orderLineInclude } from "@/lib/order-lines";
+import { canAdminTransition } from "@/lib/order-status";
+import { formatZodError, updateOrderStatusSchema } from "@/lib/validations";
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session || session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+type RouteParams = { params: Promise<{ id: string }> };
+
+export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const guard = await requireAdmin();
+  if (guard.response) return guard.response;
 
   const { id } = await params;
   const order = await prisma.order.findUnique({
     where: { id },
     include: {
       user: true,
-      items: {
-        include: { product: true },
-      },
+      ...orderLineInclude,
     },
   });
 
@@ -29,23 +27,45 @@ export async function GET(
   return NextResponse.json(order);
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session || session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  const guard = await requireAdmin();
+  if (guard.response) return guard.response;
 
   const { id } = await params;
-  const data = await request.json();
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const parsed = updateOrderStatusSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(formatZodError(parsed.error), { status: 400 });
+  }
+  const next = parsed.data.status;
+
+  const current = await prisma.order.findUnique({
+    where: { id },
+    select: { id: true, status: true },
+  });
+  if (!current) {
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
+  // Admins may only move an order along the fulfilment path or cancel it;
+  // payment-derived states belong to the Stripe webhook.
+  if (!canAdminTransition(current.status, next)) {
+    return NextResponse.json(
+      { error: `Cannot change status from ${current.status} to ${next}` },
+      { status: 400 }
+    );
+  }
 
   const order = await prisma.order.update({
     where: { id },
-    data: {
-      status: data.status,
-    },
+    data: { status: next },
   });
 
   return NextResponse.json(order);

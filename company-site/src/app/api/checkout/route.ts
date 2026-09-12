@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { auth } from "@/lib/auth";
-import { getQuotedRates } from "@/lib/shipstation";
+import { getQuotedRates, type ShippingRate } from "@/lib/shipstation";
+import { SHIPPING_PENDING_QUOTE } from "@/lib/order-status";
+import { isStrainPurchasable, isVectorPurchasable } from "@/lib/visibility";
+import { isValidEmail, normalizeEmail } from "@/lib/identity";
 
 const MAX_QUANTITY_PER_ITEM = 1000;
 
@@ -58,6 +61,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!isValidEmail(shipping.email)) {
+      return NextResponse.json(
+        { error: "A valid email address is required" },
+        { status: 400 }
+      );
+    }
+
+    // Normalize once and use the same value for the order record and Stripe
+    // so the webhook's user lookup matches the account row.
+    const customerEmail = normalizeEmail(shipping.email);
+
     // Build Stripe line items by looking up each product type
     type StripeLineItem = {
       price_data: {
@@ -97,7 +111,10 @@ export async function POST(request: NextRequest) {
           include: { productStatus: true },
         });
 
-        if (!vector || !vector.availableForSale || !vector.salePrice) {
+        // Same predicate as the public catalog: unpublished / unavailable /
+        // not-for-sale / unpriced vectors cannot be bought even if the client
+        // knows the id.
+        if (!vector || !isVectorPurchasable(vector)) {
           return NextResponse.json(
             {
               error: `Vector "${vector?.name || item.productId}" is not available for sale`,
@@ -105,13 +122,7 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-
-        if (!vector.productStatus?.isAvailable) {
-          return NextResponse.json(
-            { error: `Vector "${vector.name}" is not currently available` },
-            { status: 400 }
-          );
-        }
+        const vectorPrice = vector.salePrice as number;
 
         lineItems.push({
           price_data: {
@@ -120,23 +131,24 @@ export async function POST(request: NextRequest) {
               name: vector.name,
               description: vector.description || undefined,
             },
-            unit_amount: vector.salePrice,
+            unit_amount: vectorPrice,
           },
           quantity: item.quantity,
         });
 
-        subtotal += vector.salePrice * item.quantity;
+        subtotal += vectorPrice * item.quantity;
         vectorItems.push({
           vectorId: vector.id,
           quantity: item.quantity,
-          price: vector.salePrice,
+          price: vectorPrice,
         });
       } else if (item.productType === "strain") {
         const strain = await prisma.pichiaStrain.findUnique({
           where: { id: item.productId },
+          include: { productStatus: true },
         });
 
-        if (!strain || !strain.salePrice) {
+        if (!strain || !isStrainPurchasable(strain)) {
           return NextResponse.json(
             {
               error: `Strain "${strain?.name || item.productId}" is not available`,
@@ -144,6 +156,7 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
+        const strainPrice = strain.salePrice as number;
 
         lineItems.push({
           price_data: {
@@ -152,16 +165,16 @@ export async function POST(request: NextRequest) {
               name: strain.name,
               description: strain.genotype || undefined,
             },
-            unit_amount: strain.salePrice,
+            unit_amount: strainPrice,
           },
           quantity: item.quantity,
         });
 
-        subtotal += strain.salePrice * item.quantity;
+        subtotal += strainPrice * item.quantity;
         strainItems.push({
           strainId: strain.id,
           quantity: item.quantity,
-          price: strain.salePrice,
+          price: strainPrice,
         });
       } else {
         // Fallback to generic Product model
@@ -197,31 +210,43 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Recompute shipping server-side. The client only tells us WHICH service
-    // it selected (serviceCode); the price is re-derived from ShipStation for
-    // the submitted destination so a tampered `costCents` cannot reduce the
-    // shipping charge.
+    // ── Shipping ───────────────────────────────────────────────────────
+    // Every product sold here is physical, so shipping is never optional and
+    // never client-controlled. The server quotes the carrier itself for the
+    // submitted destination:
+    //   * client selected a service  -> price re-derived from the quote
+    //   * no selection, quote exists  -> reject; the client must pick one
+    //   * no selection, carrier down  -> accept the order with shipping owed
+    //                                    (SHIPPING_PENDING_QUOTE), never $0
+    // The client's `ratesFallback` flag is not consulted.
+    if (!shipping.zip || !shipping.country) {
+      return NextResponse.json(
+        { error: "A shipping address is required to calculate shipping" },
+        { status: 400 }
+      );
+    }
+
+    let quotedRates: ShippingRate[] = [];
+    let carrierUnavailable = false;
+    try {
+      const rates = await getQuotedRates({
+        postalCode: shipping.zip,
+        country: shipping.country,
+        state: shipping.state,
+        city: shipping.city,
+      });
+      quotedRates = Array.isArray(rates) ? rates : [];
+    } catch (err) {
+      console.error("Server-side shipping rate lookup failed:", err);
+      carrierUnavailable = true;
+    }
+
     let shippingCostCents = 0;
     let shippingServiceName: string | null = null;
+    let shippingPending = false;
 
     if (shippingRate?.serviceCode) {
-      if (!shipping.zip || !shipping.country) {
-        return NextResponse.json(
-          { error: "A shipping address is required to calculate shipping" },
-          { status: 400 }
-        );
-      }
-
-      let quotedRates;
-      try {
-        quotedRates = await getQuotedRates({
-          postalCode: shipping.zip,
-          country: shipping.country,
-          state: shipping.state,
-          city: shipping.city,
-        });
-      } catch (err) {
-        console.error("Server-side shipping recalculation failed:", err);
+      if (carrierUnavailable) {
         return NextResponse.json(
           { error: "Unable to verify shipping rates. Please try again." },
           { status: 502 }
@@ -256,6 +281,17 @@ export async function POST(request: NextRequest) {
         },
         quantity: 1,
       });
+    } else if (!carrierUnavailable && quotedRates.length > 0) {
+      return NextResponse.json(
+        { error: "Please select a shipping method" },
+        { status: 400 }
+      );
+    } else {
+      // Carrier threw or returned no services for this destination. Take the
+      // order so the sale isn't lost, but record that shipping is still owed.
+      shippingPending = true;
+      shippingServiceName = SHIPPING_PENDING_QUOTE;
+      shippingCostCents = 0;
     }
 
     // Defense-in-depth: the persisted item prices must sum to the subtotal we
@@ -280,7 +316,7 @@ export async function POST(request: NextRequest) {
     // Create pending order
     const order = await prisma.order.create({
       data: {
-        customerEmail: shipping.email,
+        customerEmail,
         userId: session?.user?.id || null,
         subtotal,
         shippingCost: shippingCostCents,
@@ -326,10 +362,11 @@ export async function POST(request: NextRequest) {
       mode: "payment",
       success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/checkout/cancelled`,
-      customer_email: shipping.email,
+      customer_email: customerEmail,
       metadata: {
         orderId: order.id,
         createAccount: createAccount ? "true" : "false",
+        shippingPending: shippingPending ? "true" : "false",
       },
     });
 

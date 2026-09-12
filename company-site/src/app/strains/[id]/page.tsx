@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
+import { isAdminRole } from "@/lib/auth-guards";
+import { isStrainPublic, PURCHASED_ORDER_STATUSES } from "@/lib/visibility";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -23,24 +25,30 @@ export default async function StrainDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  // If strain is not public, check if user has purchased it
-  if (!strain.isPublic) {
-    let hasPurchased = false;
+  // Publication gate: a non-public strain (unpublished OR unavailable) is
+  // visible only to admins (preview) and to customers who have bought it.
+  // Everyone else gets a 404 that doesn't leak existence. Same rule as the
+  // vector detail page.
+  if (!isStrainPublic(strain)) {
+    const isAdmin =
+      isAdminRole(session?.user?.role) && !session?.user?.isTeamLogin;
 
-    if (session?.user?.id) {
+    let hasPurchased = false;
+    if (!isAdmin && session?.user?.id) {
       const purchase = await prisma.strainOrderItem.findFirst({
         where: {
           strainId: id,
           order: {
             userId: session.user.id,
-            status: { in: ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"] },
+            status: { in: [...PURCHASED_ORDER_STATUSES] },
           },
         },
+        select: { id: true },
       });
       hasPurchased = !!purchase;
     }
 
-    if (!hasPurchased) {
+    if (!isAdmin && !hasPurchased) {
       notFound();
     }
   }

@@ -1,13 +1,10 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { publicVectorWhere } from "@/lib/visibility";
 
 export default async function VectorsPage() {
   const vectors = await prisma.vector.findMany({
-    where: {
-      productStatus: {
-        isAvailable: true,
-      },
-    },
+    where: publicVectorWhere,
     include: {
       promoter: true,
       selectionMarker: true,

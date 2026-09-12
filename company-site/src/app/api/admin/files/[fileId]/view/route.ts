@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSignedViewUrl } from "@/lib/s3";
+import { isVectorPublic } from "@/lib/visibility";
 
 interface RouteParams {
   params: Promise<{ fileId: string }>;
@@ -25,9 +26,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
 
     if (vectorFile) {
-      // Only allow viewing files for available products (public access)
-      // or require auth for unavailable products
-      if (!vectorFile.vector.productStatus?.isAvailable) {
+      // Anonymous inline viewing is allowed only for products that are public
+      // by the same rule the catalog uses (isPublic AND status available).
+      if (!isVectorPublic(vectorFile.vector)) {
         return NextResponse.json({ error: "Product not available" }, { status: 403 });
       }
 

@@ -187,7 +187,13 @@ export default function CheckoutPage() {
       }
     } catch (error) {
       console.error("Checkout error:", error);
-      alert("Failed to start checkout. Please try again.");
+      // Surface the server's reason (e.g. "Please select a shipping method")
+      // instead of a generic message.
+      alert(
+        error instanceof Error && error.message
+          ? error.message
+          : "Failed to start checkout. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -482,8 +488,8 @@ export default function CheckoutPage() {
 
               {!ratesLoading && ratesFallback && (
                 <p className="text-gray-500 py-4">
-                  Shipping rates unavailable. Shipping will be calculated
-                  separately.
+                  Shipping rates are temporarily unavailable. You can complete
+                  your order now; shipping will be invoiced separately.
                 </p>
               )}
 

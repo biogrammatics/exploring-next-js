@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
+import { isAdminRole } from "@/lib/auth-guards";
+import { isVectorPublic, PURCHASED_ORDER_STATUSES } from "@/lib/visibility";
 import type { VectorFileType } from "@/generated/prisma/client";
 import { AddToCartButton } from "@/app/components/cart/add-to-cart-button";
 
@@ -49,13 +51,33 @@ export default async function VectorDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  // Publication gate: only admins may view an unavailable/unpublished vector's
-  // detail page (preview). Everyone else gets a 404 that doesn't leak existence.
-  const session = await auth();
-  const isAdmin =
-    session?.user?.role === "ADMIN" || session?.user?.role === "SUPER_ADMIN";
-  if (!vector.productStatus?.isAvailable && !isAdmin) {
-    notFound();
+  // Publication gate: a non-public vector (unpublished OR unavailable) is
+  // visible only to admins (preview) and to customers who have bought it.
+  // Everyone else gets a 404 that doesn't leak existence. Same rule as the
+  // strain detail page.
+  if (!isVectorPublic(vector)) {
+    const session = await auth();
+    const isAdmin =
+      isAdminRole(session?.user?.role) && !session?.user?.isTeamLogin;
+
+    let hasPurchased = false;
+    if (!isAdmin && session?.user?.id) {
+      const purchase = await prisma.vectorOrderItem.findFirst({
+        where: {
+          vectorId: id,
+          order: {
+            userId: session.user.id,
+            status: { in: [...PURCHASED_ORDER_STATUSES] },
+          },
+        },
+        select: { id: true },
+      });
+      hasPurchased = !!purchase;
+    }
+
+    if (!isAdmin && !hasPurchased) {
+      notFound();
+    }
   }
 
   const formatPrice = (cents: number) => {

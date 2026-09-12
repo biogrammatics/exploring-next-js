@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { PURCHASED_ORDER_STATUSES } from "@/lib/order-status";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ProfileForm } from "@/app/components/account/profile-form";
@@ -36,7 +37,7 @@ export default async function AccountPage() {
       where: {
         order: {
           userId: session.user.id,
-          status: { in: ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"] },
+          status: { in: [...PURCHASED_ORDER_STATUSES] },
         },
       },
     }),
@@ -44,7 +45,7 @@ export default async function AccountPage() {
       where: {
         order: {
           userId: session.user.id,
-          status: { in: ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"] },
+          status: { in: [...PURCHASED_ORDER_STATUSES] },
         },
       },
     }),

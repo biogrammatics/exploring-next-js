@@ -1,23 +1,17 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
+import { orderLineInclude } from "@/lib/order-lines";
 
 export async function GET() {
-  const session = await auth();
-  if (
-    !session?.user ||
-    !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")
-  ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+  const guard = await requireAdmin();
+  if (guard.response) return guard.response;
 
   const orders = await prisma.order.findMany({
     orderBy: { createdAt: "desc" },
     include: {
       user: true,
-      items: {
-        include: { product: true },
-      },
+      ...orderLineInclude,
     },
   });
 

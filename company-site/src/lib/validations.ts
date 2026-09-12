@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { OrderStatus } from "@/generated/prisma/client";
+import { ORDER_STATUSES } from "@/lib/order-status";
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -92,3 +94,9 @@ export function formatZodError(error: z.ZodError<unknown>) {
     })),
   };
 }
+
+// ── Order schemas ───────────────────────────────────────────────────
+
+export const updateOrderStatusSchema = z.object({
+  status: z.enum(ORDER_STATUSES as [OrderStatus, ...OrderStatus[]]),
+});

@@ -21,6 +21,7 @@ import { prisma } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { auth } from "@/lib/auth";
 import { getQuotedRates } from "@/lib/shipstation";
+import { SHIPPING_PENDING_QUOTE } from "@/lib/order-status";
 
 type Body = Record<string, unknown>;
 
@@ -44,8 +45,12 @@ const shipping = {
   country: "US",
 };
 
+/** A valid service selection matching the default getQuotedRates mock. */
+const groundRate = { serviceCode: "fedex_ground", costCents: 3000 };
+
 type CreatedItems = { create: Array<Record<string, unknown>> };
 type OrderData = {
+  customerEmail: string;
   subtotal: number;
   total: number;
   shippingCost: number;
@@ -63,9 +68,11 @@ function lastOrderData(): OrderData {
 }
 
 type StripeArgs = {
+  customer_email: string;
   line_items: Array<{
     price_data: { unit_amount: number; product_data: { name: string } };
   }>;
+  metadata: Record<string, string>;
 };
 
 /** The args passed to stripe.checkout.sessions.create in the most recent call. */
@@ -83,12 +90,25 @@ beforeEach(() => {
     url: "https://stripe.test/checkout",
   } as never);
 
+  // Carrier is reachable and quotes one service by default.
+  vi.mocked(getQuotedRates).mockResolvedValue([
+    {
+      serviceName: "FedEx Ground",
+      serviceCode: "fedex_ground",
+      carrierCode: "fedex",
+      shipmentCost: 25,
+      otherCost: 0,
+      totalCost: 30, // dollars, handling already applied
+    },
+  ] as never);
+
   vi.mocked(prisma.vector.findUnique).mockResolvedValue({
     id: "vec_1",
     name: "pJAN",
     description: "Expression vector",
     salePrice: 5000,
     availableForSale: true,
+    isPublic: true,
     productStatus: { isAvailable: true },
   } as never);
   vi.mocked(prisma.pichiaStrain.findUnique).mockResolvedValue({
@@ -96,6 +116,8 @@ beforeEach(() => {
     name: "Bg11",
     genotype: "his4",
     salePrice: 3000,
+    isPublic: true,
+    productStatus: { isAvailable: true },
   } as never);
   vi.mocked(prisma.product.findUnique).mockResolvedValue({
     id: "prod_1",
@@ -111,6 +133,7 @@ describe("checkout: order-item persistence (finding #2)", () => {
     const res = await POST(
       makeRequest({
         shipping,
+        shippingRate: groundRate,
         items: [
           { productId: "vec_1", productType: "vector", quantity: 1 },
           { productId: "strain_1", productType: "strain", quantity: 1 },
@@ -131,6 +154,7 @@ describe("checkout: order-item persistence (finding #2)", () => {
     await POST(
       makeRequest({
         shipping,
+        shippingRate: groundRate,
         items: [{ productId: "strain_1", productType: "strain", quantity: 3 }],
       })
     );
@@ -145,19 +169,6 @@ describe("checkout: order-item persistence (finding #2)", () => {
 });
 
 describe("checkout: server-side shipping recompute (finding #1)", () => {
-  beforeEach(() => {
-    vi.mocked(getQuotedRates).mockResolvedValue([
-      {
-        serviceName: "FedEx Ground",
-        serviceCode: "fedex_ground",
-        carrierCode: "fedex",
-        shipmentCost: 25,
-        otherCost: 0,
-        totalCost: 30, // dollars, handling already applied
-      },
-    ] as never);
-  });
-
   it("charges the server-quoted price and ignores a tampered client costCents", async () => {
     const res = await POST(
       makeRequest({
@@ -179,6 +190,7 @@ describe("checkout: server-side shipping recompute (finding #1)", () => {
       li.price_data.product_data.name.startsWith("Shipping:")
     );
     expect(shipLine?.price_data.unit_amount).toBe(3000);
+    expect(lastStripeArgs().metadata.shippingPending).toBe("false");
   });
 
   it("rejects a shipping service code that the server did not quote", async () => {
@@ -194,7 +206,7 @@ describe("checkout: server-side shipping recompute (finding #1)", () => {
     expect(prisma.order.create).not.toHaveBeenCalled();
   });
 
-  it("returns 502 without creating an order if rate lookup fails", async () => {
+  it("returns 502 without creating an order if rate lookup fails for a selected service", async () => {
     vi.mocked(getQuotedRates).mockRejectedValueOnce(new Error("ShipStation down"));
     const res = await POST(
       makeRequest({
@@ -208,16 +220,136 @@ describe("checkout: server-side shipping recompute (finding #1)", () => {
     expect(prisma.order.create).not.toHaveBeenCalled();
   });
 
-  it("treats a cart with no shipping selection as $0 shipping", async () => {
+  // Shipping is never client-optional: omitting `shippingRate` used to yield a
+  // $0 shipping order. The server now quotes the carrier itself.
+  it("rejects a cart with no shipping selection when the carrier quotes rates", async () => {
     const res = await POST(
       makeRequest({
         shipping,
         items: [{ productId: "vec_1", productType: "vector", quantity: 1 }],
       })
     );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Please select a shipping method" });
+    expect(getQuotedRates).toHaveBeenCalledTimes(1);
+    expect(prisma.order.create).not.toHaveBeenCalled();
+  });
+
+  it("ignores a client ratesFallback flag when rates are actually available", async () => {
+    const res = await POST(
+      makeRequest({
+        shipping,
+        ratesFallback: true,
+        shippingRate: null,
+        items: [{ productId: "vec_1", productType: "vector", quantity: 1 }],
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(prisma.order.create).not.toHaveBeenCalled();
+  });
+
+  it("accepts a no-selection cart when the carrier is down, flagging shipping as pending", async () => {
+    vi.mocked(getQuotedRates).mockRejectedValueOnce(new Error("ShipStation down"));
+    const res = await POST(
+      makeRequest({
+        shipping,
+        items: [{ productId: "vec_1", productType: "vector", quantity: 1 }],
+      })
+    );
+
     expect(res.status).toBe(200);
+    const data = lastOrderData();
+    expect(data.shippingMethod).toBe(SHIPPING_PENDING_QUOTE);
+    expect(data.shippingCost).toBe(0);
+    expect(data.total).toBe(5000);
+    expect(lastStripeArgs().metadata.shippingPending).toBe("true");
+    // No bogus $0 shipping line on the Stripe session.
+    expect(
+      lastStripeArgs().line_items.some((li) =>
+        li.price_data.product_data.name.startsWith("Shipping:")
+      )
+    ).toBe(false);
+  });
+
+  it("requires a destination before quoting", async () => {
+    const res = await POST(
+      makeRequest({
+        shipping: { ...shipping, zip: "", country: "" },
+        items: [{ productId: "vec_1", productType: "vector", quantity: 1 }],
+      })
+    );
+    expect(res.status).toBe(400);
     expect(getQuotedRates).not.toHaveBeenCalled();
-    expect(lastOrderData().shippingCost).toBe(0);
+    expect(prisma.order.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("checkout: product visibility", () => {
+  it("rejects a vector that is not public even if it is for sale and priced", async () => {
+    vi.mocked(prisma.vector.findUnique).mockResolvedValue({
+      id: "vec_hidden",
+      name: "pSecret",
+      salePrice: 5000,
+      availableForSale: true,
+      isPublic: false,
+      productStatus: { isAvailable: true },
+    } as never);
+    const res = await POST(
+      makeRequest({
+        shipping,
+        shippingRate: groundRate,
+        items: [{ productId: "vec_hidden", productType: "vector", quantity: 1 }],
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(prisma.order.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a strain whose product status is unavailable", async () => {
+    vi.mocked(prisma.pichiaStrain.findUnique).mockResolvedValue({
+      id: "strain_1",
+      name: "Bg11",
+      salePrice: 3000,
+      isPublic: true,
+      productStatus: { isAvailable: false },
+    } as never);
+    const res = await POST(
+      makeRequest({
+        shipping,
+        shippingRate: groundRate,
+        items: [{ productId: "strain_1", productType: "strain", quantity: 1 }],
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(prisma.order.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("checkout: customer email", () => {
+  it("rejects a malformed email", async () => {
+    const res = await POST(
+      makeRequest({
+        shipping: { ...shipping, email: "not-an-email" },
+        shippingRate: groundRate,
+        items: [{ productId: "vec_1", productType: "vector", quantity: 1 }],
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(prisma.order.create).not.toHaveBeenCalled();
+  });
+
+  it("normalizes the email before persisting and passing to Stripe", async () => {
+    const res = await POST(
+      makeRequest({
+        shipping: { ...shipping, email: "  Ada@Example.COM " },
+        shippingRate: groundRate,
+        items: [{ productId: "vec_1", productType: "vector", quantity: 1 }],
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(lastOrderData().customerEmail).toBe("ada@example.com");
+    expect(lastStripeArgs().customer_email).toBe("ada@example.com");
   });
 });
 
@@ -228,6 +360,7 @@ describe("checkout: quantity validation (finding #9)", () => {
       const res = await POST(
         makeRequest({
           shipping,
+          shippingRate: groundRate,
           items: [{ productId: "vec_1", productType: "vector", quantity }],
         })
       );

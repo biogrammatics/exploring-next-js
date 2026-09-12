@@ -14,7 +14,7 @@ vi.mock("@/lib/s3", () => ({
 import { GET } from "./route";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { adminSession, userSession } from "@/test/session-fixtures";
+import { adminSession, makeSession, userSession } from "@/test/session-fixtures";
 
 function call(fileId: string) {
   const req = new Request(
@@ -23,11 +23,11 @@ function call(fileId: string) {
   return GET(req, { params: Promise.resolve({ fileId }) });
 }
 
-function vectorFile(isAvailable: boolean) {
+function vectorFile(isAvailable: boolean, isPublic = true) {
   return {
     s3Key: "k",
     fileName: "map.gb",
-    vector: { productStatus: { isAvailable } },
+    vector: { isPublic, productStatus: { isAvailable } },
   };
 }
 
@@ -68,6 +68,27 @@ describe("vector file downloads", () => {
     const res = await call("vf1");
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe("https://s3.example/signed-url");
+  });
+
+  // Visibility is isPublic AND isAvailable: an available-but-unpublished
+  // product's files are not public either.
+  it("treats an available but NOT-public product as non-public (anon 401, USER 403)", async () => {
+    vi.mocked(prisma.vectorFile.findUnique).mockResolvedValue(
+      vectorFile(true, false) as never
+    );
+    vi.mocked(auth).mockResolvedValue(null as never);
+    expect((await call("vf1")).status).toBe(401);
+    vi.mocked(auth).mockResolvedValue(userSession as never);
+    expect((await call("vf1")).status).toBe(403);
+  });
+
+  it("forbids a team login on an admin account from a non-public product file", async () => {
+    vi.mocked(prisma.vectorFile.findUnique).mockResolvedValue(vectorFile(false) as never);
+    vi.mocked(auth).mockResolvedValue(
+      makeSession("ADMIN", { isTeamLogin: true }) as never
+    );
+    const res = await call("vf1");
+    expect(res.status).toBe(403);
   });
 });
 

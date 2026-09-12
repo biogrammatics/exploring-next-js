@@ -1,14 +1,10 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { publicStrainWhere } from "@/lib/visibility";
 
 export default async function StrainsPage() {
   const strains = await prisma.pichiaStrain.findMany({
-    where: {
-      isPublic: true,
-      productStatus: {
-        isAvailable: true,
-      },
-    },
+    where: publicStrainWhere,
     include: {
       strainType: true,
       productStatus: true,
