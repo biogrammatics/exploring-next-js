@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { assertAdminAction, requireAdminPage } from "@/lib/auth-guards";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -7,6 +8,7 @@ interface PageProps {
 }
 
 export default async function NewLotPage({ params }: PageProps) {
+  await requireAdminPage();
   const { id } = await params;
 
   const vector = await prisma.vector.findUnique({
@@ -19,6 +21,7 @@ export default async function NewLotPage({ params }: PageProps) {
 
   async function createLot(formData: FormData) {
     "use server";
+    await assertAdminAction();
 
     const lotNumber = formData.get("lotNumber") as string;
     const manufacturedAt = formData.get("manufacturedAt") as string;

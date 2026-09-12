@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { createConstruct } from "@/lib/twist";
 import { createConstructSchema, formatZodError } from "@/lib/validations";
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (
-    session?.user?.role !== "ADMIN" &&
-    session?.user?.role !== "SUPER_ADMIN"
-  ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requireAdmin();
+  if (guard.response) return guard.response;
 
   try {
     const raw = await request.json();

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { assertAdminAction, requireAdminPage } from "@/lib/auth-guards";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import type { VectorFileType } from "@/generated/prisma/client";
@@ -36,6 +37,7 @@ function getFileTypeLabel(type: VectorFileType) {
 }
 
 export default async function EditVectorPage({ params }: PageProps) {
+  await requireAdminPage();
   const { id } = await params;
 
   const [vector, promoters, selectionMarkers, vectorTypes, hostOrganisms, productStatuses] =
@@ -78,6 +80,7 @@ export default async function EditVectorPage({ params }: PageProps) {
 
   async function updateVector(formData: FormData) {
     "use server";
+    await assertAdminAction();
 
     const thumbnailValue = formData.get("thumbnailBase64") as string;
 
@@ -92,6 +95,7 @@ export default async function EditVectorPage({ params }: PageProps) {
       hasLoxSites: formData.get("hasLoxSites") === "on",
       availableForSale: formData.get("availableForSale") === "on",
       availableForSubscription: formData.get("availableForSubscription") === "on",
+      isPublic: formData.get("isPublic") === "on",
       promoterId: formData.get("promoterId") as string || null,
       selectionMarkerId: formData.get("selectionMarkerId") as string || null,
       vectorTypeId: formData.get("vectorTypeId") as string || null,
@@ -110,6 +114,7 @@ export default async function EditVectorPage({ params }: PageProps) {
 
   async function deleteVector() {
     "use server";
+    await assertAdminAction();
 
     // Double-check that vector can be deleted
     const vectorWithCounts = await prisma.vector.findUnique({
@@ -148,10 +153,11 @@ export default async function EditVectorPage({ params }: PageProps) {
 
   async function deleteFile(formData: FormData) {
     "use server";
+    await assertAdminAction();
 
     const fileId = formData.get("fileId") as string;
     await prisma.vectorFile.delete({
-      where: { id: fileId },
+      where: { id: fileId, vectorId: id },
     });
 
     redirect(`/admin/vectors/${id}/edit`);
@@ -176,6 +182,7 @@ export default async function EditVectorPage({ params }: PageProps) {
           hasLoxSites: vector.hasLoxSites,
           availableForSale: vector.availableForSale,
           availableForSubscription: vector.availableForSubscription,
+          isPublic: vector.isPublic,
           promoterId: vector.promoterId,
           selectionMarkerId: vector.selectionMarkerId,
           vectorTypeId: vector.vectorTypeId,

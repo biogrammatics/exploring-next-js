@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { uploadToS3, BUCKET_NAME } from "@/lib/s3";
 import type { LotFileType } from "@/generated/prisma/client";
@@ -10,11 +10,8 @@ interface RouteParams {
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const session = await auth();
-    const isAdmin = session?.user?.role === "ADMIN" || session?.user?.role === "SUPER_ADMIN";
-    if (!session?.user || !isAdmin) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requireAdmin();
+    if (guard.response) return guard.response;
 
     const { id: vectorId, lotId } = await params;
 
@@ -96,13 +93,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const session = await auth();
-    const isAdmin =
-      session?.user?.role === "ADMIN" || session?.user?.role === "SUPER_ADMIN";
-    if (!session?.user || !isAdmin) {
-      // Lot QC file metadata is internal — admin only, matching the POST above.
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requireAdmin();
+    if (guard.response) return guard.response;
 
     const { lotId } = await params;
 

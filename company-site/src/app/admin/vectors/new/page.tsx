@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/db";
+import { assertAdminAction, requireAdminPage } from "@/lib/auth-guards";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
 export default async function NewVectorPage() {
+  await requireAdminPage();
   const [promoters, selectionMarkers, vectorTypes, hostOrganisms, productStatuses] =
     await Promise.all([
       prisma.promoter.findMany({ orderBy: { name: "asc" } }),
@@ -14,6 +16,7 @@ export default async function NewVectorPage() {
 
   async function createVector(formData: FormData) {
     "use server";
+    await assertAdminAction();
 
     const data = {
       name: formData.get("name") as string,
@@ -26,6 +29,7 @@ export default async function NewVectorPage() {
       hasLoxSites: formData.get("hasLoxSites") === "on",
       availableForSale: formData.get("availableForSale") === "on",
       availableForSubscription: formData.get("availableForSubscription") === "on",
+      isPublic: formData.get("isPublic") === "on",
       promoterId: formData.get("promoterId") as string || null,
       selectionMarkerId: formData.get("selectionMarkerId") as string || null,
       vectorTypeId: formData.get("vectorTypeId") as string || null,
@@ -258,6 +262,16 @@ export default async function NewVectorPage() {
                 className="rounded"
               />
               <span className="text-sm text-gray-700">Available for Subscription</span>
+            </label>
+
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="isPublic"
+                defaultChecked
+                className="rounded"
+              />
+              <span className="text-sm text-gray-700">Visible in public catalog</span>
             </label>
           </div>
 

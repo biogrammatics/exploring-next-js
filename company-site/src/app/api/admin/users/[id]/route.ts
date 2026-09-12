@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session || session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+  const guard = await requireAdmin();
+  if (guard.response) return guard.response;
 
   const { id } = await params;
   const user = await prisma.user.findUnique({
@@ -21,6 +19,8 @@ export async function GET(
           items: {
             include: { product: true },
           },
+          vectorOrderItems: { include: { vector: true } },
+          strainOrderItems: { include: { strain: true } },
         },
       },
     },

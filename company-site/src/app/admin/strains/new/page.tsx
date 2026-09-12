@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/db";
+import { assertAdminAction, requireAdminPage } from "@/lib/auth-guards";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
 export default async function NewStrainPage() {
+  await requireAdminPage();
   const [strainTypes, productStatuses] = await Promise.all([
     prisma.strainType.findMany({ orderBy: { name: "asc" } }),
     prisma.productStatus.findMany({ orderBy: { name: "asc" } }),
@@ -10,6 +12,7 @@ export default async function NewStrainPage() {
 
   async function createStrain(formData: FormData) {
     "use server";
+    await assertAdminAction();
 
     const data = {
       name: formData.get("name") as string,
@@ -28,6 +31,7 @@ export default async function NewStrainPage() {
       citations: formData.get("citations") as string || null,
       strainTypeId: formData.get("strainTypeId") as string || null,
       productStatusId: formData.get("productStatusId") as string,
+      isPublic: formData.get("isPublic") === "on",
     };
 
     await prisma.pichiaStrain.create({ data });
@@ -104,6 +108,19 @@ export default async function NewStrainPage() {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="isPublic"
+              name="isPublic"
+              defaultChecked
+              className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <label htmlFor="isPublic" className="text-sm text-gray-700">
+              Show in public catalog
+            </label>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

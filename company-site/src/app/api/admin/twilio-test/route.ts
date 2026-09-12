@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { getTwilioStatus, sendTestSms } from "@/lib/twilio";
 import { sendTestSmsSchema, formatZodError } from "@/lib/validations";
 
@@ -7,10 +7,8 @@ import { sendTestSmsSchema, formatZodError } from "@/lib/validations";
  * GET /api/admin/twilio-test — Check Twilio configuration status
  */
 export async function GET() {
-  const session = await auth();
-  if (!session?.user || !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requireAdmin();
+  if (guard.response) return guard.response;
 
   const status = getTwilioStatus();
   return NextResponse.json({ status });
@@ -20,10 +18,8 @@ export async function GET() {
  * POST /api/admin/twilio-test — Send a test SMS
  */
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user || !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requireAdmin();
+  if (guard.response) return guard.response;
 
   try {
     const body = await request.json();

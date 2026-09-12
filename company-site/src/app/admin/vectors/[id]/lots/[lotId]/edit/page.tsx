@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { assertAdminAction, requireAdminPage } from "@/lib/auth-guards";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import type { LotFileType } from "@/generated/prisma/client";
@@ -31,6 +32,7 @@ function getFileTypeLabel(type: LotFileType) {
 }
 
 export default async function EditLotPage({ params }: PageProps) {
+  await requireAdminPage();
   const { id, lotId } = await params;
 
   const [vector, lot] = await Promise.all([
@@ -53,6 +55,7 @@ export default async function EditLotPage({ params }: PageProps) {
 
   async function updateLot(formData: FormData) {
     "use server";
+    await assertAdminAction();
 
     const lotNumber = formData.get("lotNumber") as string;
     const manufacturedAt = formData.get("manufacturedAt") as string;
@@ -95,6 +98,7 @@ export default async function EditLotPage({ params }: PageProps) {
 
   async function deleteLot() {
     "use server";
+    await assertAdminAction();
 
     // Clear current shipping lot reference if this is the current lot
     const currentVector = await prisma.vector.findUnique({
@@ -117,10 +121,11 @@ export default async function EditLotPage({ params }: PageProps) {
 
   async function deleteFile(formData: FormData) {
     "use server";
+    await assertAdminAction();
 
     const fileId = formData.get("fileId") as string;
     await prisma.vectorLotFile.delete({
-      where: { id: fileId },
+      where: { id: fileId, lotId },
     });
 
     redirect(`/admin/vectors/${id}/lots/${lotId}/edit`);

@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/db";
+import { requireAdminPage } from "@/lib/auth-guards";
 import Link from "next/link";
 
 export default async function AdminStrainsPage() {
+  await requireAdminPage();
   const strains = await prisma.pichiaStrain.findMany({
     orderBy: { name: "asc" },
     include: {

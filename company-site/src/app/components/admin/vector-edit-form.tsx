@@ -16,6 +16,7 @@ interface VectorData {
   hasLoxSites: boolean;
   availableForSale: boolean;
   availableForSubscription: boolean;
+  isPublic: boolean;
   promoterId: string | null;
   selectionMarkerId: string | null;
   vectorTypeId: string | null;
@@ -304,6 +305,16 @@ export function VectorEditForm({
               className="rounded"
             />
             <span className="text-sm text-gray-700">Available for Subscription</span>
+          </label>
+
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="isPublic"
+              defaultChecked={vector.isPublic}
+              className="rounded"
+            />
+            <span className="text-sm text-gray-700">Visible in public catalog</span>
           </label>
         </div>
 

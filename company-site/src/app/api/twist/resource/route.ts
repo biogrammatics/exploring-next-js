@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { getUserResource, type TwistEnv } from "@/lib/twist";
 
 /**
@@ -10,10 +10,8 @@ import { getUserResource, type TwistEnv } from "@/lib/twist";
  * library rather than fixed here.
  */
 export async function GET(request: NextRequest) {
-  const session = await auth();
-  if (session?.user?.role !== "ADMIN" && session?.user?.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requireAdmin();
+  if (guard.response) return guard.response;
 
   const params = request.nextUrl.searchParams;
   const path = params.get("path") ?? "orders/";

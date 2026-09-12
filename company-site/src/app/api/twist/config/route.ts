@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { envConfig } from "@/lib/twist";
 
 /**
@@ -14,10 +14,8 @@ import { envConfig } from "@/lib/twist";
  * Token presence and shape only. No secret values are returned.
  */
 export async function GET() {
-  const session = await auth();
-  if (session?.user?.role !== "ADMIN" && session?.user?.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requireAdmin();
+  if (guard.response) return guard.response;
 
   const describe = (env: "staging" | "production") => {
     const { baseUrl, email, authToken, endUserToken } = envConfig(env);

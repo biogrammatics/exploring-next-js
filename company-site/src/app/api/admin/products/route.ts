@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { createProductSchema, formatZodError } from "@/lib/validations";
 
 export async function GET() {
-  const session = await auth();
-  if (
-    !session?.user ||
-    !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")
-  ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+  const guard = await requireAdmin();
+  if (guard.response) return guard.response;
 
   const products = await prisma.product.findMany({
     orderBy: { createdAt: "desc" },
@@ -20,13 +15,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (
-    !session?.user ||
-    !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")
-  ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+  const guard = await requireAdmin();
+  if (guard.response) return guard.response;
 
   const raw = await request.json();
   const parsed = createProductSchema.safeParse(raw);

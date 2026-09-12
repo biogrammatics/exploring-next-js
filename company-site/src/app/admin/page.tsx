@@ -1,10 +1,16 @@
-import { auth } from "@/lib/auth";
+import { requireAdminPage, isSuperAdminRole } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
+import { orderLineInclude, countOrderLines } from "@/lib/order-lines";
+import {
+  ORDER_STATUS_COLORS,
+  ORDER_STATUS_LABELS,
+  PURCHASED_ORDER_STATUSES,
+} from "@/lib/order-status";
 import Link from "next/link";
 
 export default async function AdminDashboardPage() {
-  const session = await auth();
-  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
+  const session = await requireAdminPage();
+  const isSuperAdmin = isSuperAdminRole(session.user.role);
 
   const [vectorCount, strainCount, orderCount, userCount, recentOrders] = await Promise.all([
     prisma.vector.count(),
@@ -14,20 +20,13 @@ export default async function AdminDashboardPage() {
     prisma.order.findMany({
       take: 5,
       orderBy: { createdAt: "desc" },
-      include: {
-        vectorOrderItems: {
-          include: { vector: true },
-        },
-        strainOrderItems: {
-          include: { strain: true },
-        },
-      },
+      include: orderLineInclude,
     }),
   ]);
 
   const paidOrders = await prisma.order.count({ where: { status: "PAID" } });
   const totalRevenue = await prisma.order.aggregate({
-    where: { status: { in: ["PAID", "SHIPPED", "DELIVERED"] } },
+    where: { status: { in: [...PURCHASED_ORDER_STATUSES] } },
     _sum: { total: true },
   });
 
@@ -107,7 +106,7 @@ export default async function AdminDashboardPage() {
             </thead>
             <tbody>
               {recentOrders.map((order) => {
-                const itemCount = order.vectorOrderItems.length + order.strainOrderItems.length;
+                const itemCount = countOrderLines(order);
                 return (
                   <tr key={order.id} className="border-b">
                     <td className="py-2">
@@ -120,14 +119,8 @@ export default async function AdminDashboardPage() {
                       {itemCount} item{itemCount !== 1 ? "s" : ""}
                     </td>
                     <td className="py-2">
-                      <span className={`px-2 py-1 rounded text-xs ${
-                        order.status === "PAID" ? "bg-green-100 text-green-800" :
-                        order.status === "SHIPPED" ? "bg-blue-100 text-blue-800" :
-                        order.status === "DELIVERED" ? "bg-purple-100 text-purple-800" :
-                        order.status === "CANCELLED" ? "bg-red-100 text-red-800" :
-                        "bg-gray-100 text-gray-800"
-                      }`}>
-                        {order.status}
+                      <span className={`px-2 py-1 rounded text-xs ${ORDER_STATUS_COLORS[order.status]}`}>
+                        {ORDER_STATUS_LABELS[order.status]}
                       </span>
                     </td>
                     <td className="py-2">{formatPrice(order.total)}</td>

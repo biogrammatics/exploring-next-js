@@ -1,5 +1,4 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { requireAdminPage, isSuperAdminRole } from "@/lib/auth-guards";
 import { AdminSidebar } from "@/app/components/admin/admin-sidebar";
 
 export default async function AdminLayout({
@@ -7,14 +6,8 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
-
-  const isAdmin = session?.user?.role === "ADMIN" || session?.user?.role === "SUPER_ADMIN";
-  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
-
-  if (!session || !isAdmin) {
-    redirect("/");
-  }
+  const session = await requireAdminPage();
+  const isSuperAdmin = isSuperAdminRole(session.user.role);
 
   return (
     <div className="flex min-h-[calc(100vh-65px)]">

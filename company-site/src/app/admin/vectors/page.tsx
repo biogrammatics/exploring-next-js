@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/db";
+import { requireAdminPage } from "@/lib/auth-guards";
 import Link from "next/link";
 
 export default async function AdminVectorsPage() {
+  await requireAdminPage();
   const vectors = await prisma.vector.findMany({
     orderBy: { name: "asc" },
     include: {
@@ -49,7 +51,14 @@ export default async function AdminVectorsPage() {
               <tr key={vector.id} className="border-t">
                 <td className="py-3 px-4">
                   <div>
-                    <p className="font-medium">{vector.name}</p>
+                    <p className="font-medium">
+                      {vector.name}
+                      {!vector.isPublic && (
+                        <span className="ml-2 px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded">
+                          Hidden
+                        </span>
+                      )}
+                    </p>
                     {vector.vectorSize && (
                       <p className="text-sm text-gray-500">
                         {vector.vectorSize.toLocaleString()} bp

@@ -40,10 +40,10 @@ describe("GET /api/admin/products authorization", () => {
 describe("POST /api/admin/products", () => {
   const validProduct = { name: "Competent cells", price: 5000 };
 
-  it("rejects anonymous callers before touching the database", async () => {
+  it("rejects anonymous callers with 401 before touching the database", async () => {
     vi.mocked(auth).mockResolvedValue(null as never);
     const res = await POST(postRequest(validProduct));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
     expect(prisma.product.create).not.toHaveBeenCalled();
   });
 

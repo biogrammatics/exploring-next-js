@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 
 export async function GET() {
-  const session = await auth();
-  if (
-    !session?.user ||
-    !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")
-  ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+  const guard = await requireAdmin();
+  if (guard.response) return guard.response;
 
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },

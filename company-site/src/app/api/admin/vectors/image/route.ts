@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { uploadToS3, deleteFromS3 } from "@/lib/s3";
 
 // POST - Upload a vector map image
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user || !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requireAdmin();
+    if (guard.response) return guard.response;
 
     const formData = await request.formData();
     const file = formData.get("file") as File;
@@ -87,10 +85,8 @@ export async function POST(request: NextRequest) {
 // DELETE - Remove vector map image
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user || !["ADMIN", "SUPER_ADMIN"].includes(session.user.role || "")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requireAdmin();
+    if (guard.response) return guard.response;
 
     const { searchParams } = new URL(request.url);
     const vectorId = searchParams.get("vectorId");

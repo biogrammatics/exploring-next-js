@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { describeConstruct } from "@/lib/twist";
 
 export async function GET(request: NextRequest) {
-  const session = await auth();
-  if (session?.user?.role !== "ADMIN" && session?.user?.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requireAdmin();
+  if (guard.response) return guard.response;
 
   const constructId = request.nextUrl.searchParams.get("id");
   if (!constructId) {

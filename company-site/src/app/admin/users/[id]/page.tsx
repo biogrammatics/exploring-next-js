@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/db";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { notFound } from "next/navigation";
+import {
+  assertSuperAdminAction,
+  isSuperAdminRole,
+  requireAdminPage,
+} from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
 
 export default async function AdminUserDetailPage({
@@ -9,11 +13,10 @@ export default async function AdminUserDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const session = await requireAdminPage();
   const { id } = await params;
-  const session = await auth();
-  const currentUserRole = session?.user?.role;
-  const currentUserId = session?.user?.id;
-  const isSuperAdmin = currentUserRole === "SUPER_ADMIN";
+  const currentUserId = session.user.id;
+  const isSuperAdmin = isSuperAdminRole(session.user.role);
 
   const user = await prisma.user.findUnique({
     where: { id },
@@ -38,11 +41,7 @@ export default async function AdminUserDetailPage({
 
   async function updateRole(formData: FormData) {
     "use server";
-
-    const session = await auth();
-    if (session?.user?.role !== "SUPER_ADMIN") {
-      throw new Error("Unauthorized: Only Super Admins can change roles");
-    }
+    const session = await assertSuperAdminAction();
 
     const newRole = formData.get("role") as "USER" | "ADMIN" | "SUPER_ADMIN";
     const userId = formData.get("userId") as string;

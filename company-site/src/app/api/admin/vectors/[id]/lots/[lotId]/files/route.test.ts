@@ -32,7 +32,7 @@ describe("GET lot QC files authorization (#8)", () => {
 
   it("rejects a plain USER (metadata is admin-only)", async () => {
     vi.mocked(auth).mockResolvedValue(userSession as never);
-    expect((await call()).status).toBe(401);
+    expect((await call()).status).toBe(403);
     expect(prisma.vectorLotFile.findMany).not.toHaveBeenCalled();
   });
 

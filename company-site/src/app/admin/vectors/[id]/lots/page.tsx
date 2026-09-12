@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { requireAdminPage } from "@/lib/auth-guards";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 
@@ -21,6 +22,7 @@ function isExpired(date: Date | null) {
 }
 
 export default async function VectorLotsPage({ params }: PageProps) {
+  await requireAdminPage();
   const { id } = await params;
 
   const vector = await prisma.vector.findUnique({

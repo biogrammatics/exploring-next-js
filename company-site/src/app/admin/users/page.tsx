@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/db";
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { requireAdminPage } from "@/lib/auth-guards";
 
 export default async function AdminUsersPage() {
-  const session = await auth();
-  const currentUserRole = session?.user?.role;
+  const session = await requireAdminPage();
+  const currentUserRole = session.user.role;
 
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },

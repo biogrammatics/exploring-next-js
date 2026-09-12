@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { assertAdminAction, requireAdminPage } from "@/lib/auth-guards";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { DeleteButton } from "@/app/components/admin/delete-button";
@@ -8,6 +9,7 @@ interface PageProps {
 }
 
 export default async function EditStrainPage({ params }: PageProps) {
+  await requireAdminPage();
   const { id } = await params;
 
   const [strain, strainTypes, productStatuses] = await Promise.all([
@@ -36,6 +38,7 @@ export default async function EditStrainPage({ params }: PageProps) {
 
   async function updateStrain(formData: FormData) {
     "use server";
+    await assertAdminAction();
 
     const data = {
       name: formData.get("name") as string,
@@ -67,6 +70,7 @@ export default async function EditStrainPage({ params }: PageProps) {
 
   async function deleteStrain() {
     "use server";
+    await assertAdminAction();
 
     // Double-check that strain can be deleted
     const strainWithCounts = await prisma.pichiaStrain.findUnique({

@@ -20,10 +20,10 @@ beforeEach(() => {
 });
 
 describe("GET /api/admin/users authorization", () => {
-  it("rejects anonymous callers with 403", async () => {
+  it("rejects anonymous callers with 401", async () => {
     vi.mocked(auth).mockResolvedValue(null as never);
     const res = await GET();
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
     expect(prisma.user.findMany).not.toHaveBeenCalled();
   });
 
