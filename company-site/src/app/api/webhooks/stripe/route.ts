@@ -185,6 +185,18 @@ async function dispatchEvent(tx: Tx, event: Stripe.Event) {
   }
 }
 
+/**
+ * True only when the unique-constraint failure came from the event ledger
+ * insert. Any other P2002 (e.g. User.email during account creation) is a real
+ * processing failure and must stay retryable, not be acknowledged as a replay.
+ */
+function isLedgerDuplicate(err: unknown): boolean {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (err.code !== "P2002") return false;
+  const meta = err.meta as { modelName?: string; target?: unknown } | undefined;
+  return meta?.modelName === "ProcessedWebhookEvent";
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.text();
   const signature = request.headers.get("stripe-signature");
@@ -216,10 +228,7 @@ export async function POST(request: NextRequest) {
       await dispatchEvent(tx, event);
     });
   } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
-    ) {
+    if (isLedgerDuplicate(err)) {
       // Already processed — acknowledge so Stripe stops retrying.
       return NextResponse.json({ received: true, duplicate: true });
     }

@@ -80,6 +80,7 @@ describe("stripe webhook: idempotency", () => {
       new Prisma.PrismaClientKnownRequestError("dup", {
         code: "P2002",
         clientVersion: "7.2.0",
+        meta: { modelName: "ProcessedWebhookEvent", target: ["id"] },
       })
     );
 
@@ -87,6 +88,25 @@ describe("stripe webhook: idempotency", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ duplicate: true });
     expect(tx.order.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not mistake a uniqueness failure elsewhere for a replayed event", async () => {
+    stubEvent({
+      id: "evt_user_clash",
+      type: "checkout.session.completed",
+      data: { object: { payment_status: "paid", metadata: { orderId: "o1" } } },
+    });
+    // e.g. User.email collided during account creation inside the transaction
+    tx.processedWebhookEvent.create.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError("email taken", {
+        code: "P2002",
+        clientVersion: "7.2.0",
+        meta: { modelName: "User", target: ["email"] },
+      })
+    );
+
+    const res = await POST(makeRequest());
+    expect(res.status).toBe(500);
   });
 
   it("records the event id in the same transaction as its side effects", async () => {

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/lib/db", () => ({
-  prisma: { order: { findUnique: vi.fn(), update: vi.fn() } },
+  prisma: { order: { findUnique: vi.fn(), updateMany: vi.fn() } },
 }));
 
 import { GET, PATCH } from "./route";
@@ -42,9 +42,7 @@ beforeEach(() => {
     vectorOrderItems: [],
     strainOrderItems: [],
   } as never);
-  vi.mocked(prisma.order.update).mockImplementation((async (args: {
-    data: { status: string };
-  }) => ({ id: ORDER_ID, status: args.data.status })) as never);
+  vi.mocked(prisma.order.updateMany).mockResolvedValue({ count: 1 } as never);
 });
 
 describe("PATCH /api/admin/orders/[id] authorization", () => {
@@ -52,14 +50,14 @@ describe("PATCH /api/admin/orders/[id] authorization", () => {
     vi.mocked(auth).mockResolvedValue(null as never);
     const res = await patch({ status: "SHIPPED" });
     expect(res.status).toBe(401);
-    expect(prisma.order.update).not.toHaveBeenCalled();
+    expect(prisma.order.updateMany).not.toHaveBeenCalled();
   });
 
   it("rejects a plain USER with 403", async () => {
     vi.mocked(auth).mockResolvedValue(userSession as never);
     const res = await patch({ status: "SHIPPED" });
     expect(res.status).toBe(403);
-    expect(prisma.order.update).not.toHaveBeenCalled();
+    expect(prisma.order.updateMany).not.toHaveBeenCalled();
   });
 
   it("rejects a team login on an admin account with 403", async () => {
@@ -68,7 +66,7 @@ describe("PATCH /api/admin/orders/[id] authorization", () => {
     );
     const res = await patch({ status: "SHIPPED" });
     expect(res.status).toBe(403);
-    expect(prisma.order.update).not.toHaveBeenCalled();
+    expect(prisma.order.updateMany).not.toHaveBeenCalled();
   });
 
   it("allows ADMIN", async () => {
@@ -83,8 +81,8 @@ describe("PATCH /api/admin/orders/[id] authorization", () => {
     vi.mocked(auth).mockResolvedValue(superAdminSession as never);
     const res = await patch({ status: "SHIPPED" });
     expect(res.status).toBe(200);
-    expect(prisma.order.update).toHaveBeenCalledWith({
-      where: { id: ORDER_ID },
+    expect(prisma.order.updateMany).toHaveBeenCalledWith({
+      where: { id: ORDER_ID, status: "PAID" },
       data: { status: "SHIPPED" },
     });
   });
@@ -98,26 +96,26 @@ describe("PATCH /api/admin/orders/[id] validation", () => {
   it("returns 400 on malformed JSON", async () => {
     const res = await patch("{not json", true);
     expect(res.status).toBe(400);
-    expect(prisma.order.update).not.toHaveBeenCalled();
+    expect(prisma.order.updateMany).not.toHaveBeenCalled();
   });
 
   it("returns 400 for a status outside the enum", async () => {
     const res = await patch({ status: "TELEPORTED" });
     expect(res.status).toBe(400);
-    expect(prisma.order.update).not.toHaveBeenCalled();
+    expect(prisma.order.updateMany).not.toHaveBeenCalled();
   });
 
   it("returns 400 when status is missing", async () => {
     const res = await patch({});
     expect(res.status).toBe(400);
-    expect(prisma.order.update).not.toHaveBeenCalled();
+    expect(prisma.order.updateMany).not.toHaveBeenCalled();
   });
 
   it("returns 404 when the order does not exist", async () => {
     vi.mocked(prisma.order.findUnique).mockResolvedValue(null as never);
     const res = await patch({ status: "SHIPPED" });
     expect(res.status).toBe(404);
-    expect(prisma.order.update).not.toHaveBeenCalled();
+    expect(prisma.order.updateMany).not.toHaveBeenCalled();
   });
 
   it("returns 400 for a disallowed transition (PAID -> PENDING)", async () => {
@@ -126,7 +124,7 @@ describe("PATCH /api/admin/orders/[id] validation", () => {
     expect(await res.json()).toEqual({
       error: "Cannot change status from PAID to PENDING",
     });
-    expect(prisma.order.update).not.toHaveBeenCalled();
+    expect(prisma.order.updateMany).not.toHaveBeenCalled();
   });
 
   it("refuses to mark an unpaid order as PAID by hand", async () => {
@@ -136,7 +134,7 @@ describe("PATCH /api/admin/orders/[id] validation", () => {
     } as never);
     const res = await patch({ status: "PAID" });
     expect(res.status).toBe(400);
-    expect(prisma.order.update).not.toHaveBeenCalled();
+    expect(prisma.order.updateMany).not.toHaveBeenCalled();
   });
 
   it("refuses to reopen a REFUNDED order", async () => {
@@ -146,17 +144,32 @@ describe("PATCH /api/admin/orders/[id] validation", () => {
     } as never);
     const res = await patch({ status: "PROCESSING" });
     expect(res.status).toBe(400);
-    expect(prisma.order.update).not.toHaveBeenCalled();
+    expect(prisma.order.updateMany).not.toHaveBeenCalled();
   });
 
   it("applies an allowed transition (PAID -> PROCESSING) and returns 200", async () => {
     const res = await patch({ status: "PROCESSING" });
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ id: ORDER_ID, status: "PROCESSING" });
-    expect(prisma.order.update).toHaveBeenCalledWith({
-      where: { id: ORDER_ID },
+    expect(prisma.order.updateMany).toHaveBeenCalledWith({
+      where: { id: ORDER_ID, status: "PAID" },
       data: { status: "PROCESSING" },
     });
+  });
+
+  it("returns 409 when the order changed between read and write (e.g. a refund landed)", async () => {
+    vi.mocked(prisma.order.updateMany).mockResolvedValue({ count: 0 } as never);
+    const res = await patch({ status: "SHIPPED" });
+    expect(res.status).toBe(409);
+  });
+
+  it("refuses to declare a refund by hand on a DISPUTED order", async () => {
+    vi.mocked(prisma.order.findUnique).mockResolvedValue({
+      id: ORDER_ID,
+      status: "DISPUTED",
+    } as never);
+    const res = await patch({ status: "REFUNDED" });
+    expect(res.status).toBe(400);
+    expect(prisma.order.updateMany).not.toHaveBeenCalled();
   });
 
   it("applies SHIPPED -> DELIVERED", async () => {

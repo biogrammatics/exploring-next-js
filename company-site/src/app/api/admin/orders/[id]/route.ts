@@ -63,10 +63,21 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     );
   }
 
-  const order = await prisma.order.update({
-    where: { id },
+  // Conditional write: the transition was validated against `current.status`,
+  // so only apply it if the row is still in that state. Otherwise a webhook
+  // (refund, dispute) that landed between our read and write would be
+  // silently overwritten by a stale admin request.
+  const { count } = await prisma.order.updateMany({
+    where: { id, status: current.status },
     data: { status: next },
   });
+  if (count === 0) {
+    return NextResponse.json(
+      { error: "Order changed while you were editing. Reload and try again." },
+      { status: 409 }
+    );
+  }
 
+  const order = await prisma.order.findUnique({ where: { id } });
   return NextResponse.json(order);
 }

@@ -33,9 +33,12 @@ export const PURCHASED_ORDER_STATUSES: readonly OrderStatus[] = [
 
 /**
  * Transitions an admin may perform by hand. Payment-derived states
- * (PAID, PAYMENT_FAILED, REFUNDED, DISPUTED) are written by the Stripe
- * webhook; an admin can move an order forward through fulfilment or cancel
- * it, but cannot mark an unpaid order as paid or reopen a refunded one.
+ * (PAID, PAYMENT_FAILED, REFUNDED, DISPUTED) are written ONLY by the Stripe
+ * webhook and never appear as a target here: an admin can move an order
+ * forward through fulfilment or cancel it, but cannot mark an unpaid order
+ * as paid, declare a refund that Stripe has not issued, or reopen a refunded
+ * one. Writers must apply a transition with a conditional update on the
+ * expected current status (see the admin order PATCH handler).
  */
 export const ADMIN_ORDER_TRANSITIONS: Readonly<
   Record<OrderStatus, readonly OrderStatus[]>
@@ -48,7 +51,7 @@ export const ADMIN_ORDER_TRANSITIONS: Readonly<
   CANCELLED: [],
   PAYMENT_FAILED: ["CANCELLED"],
   REFUNDED: [],
-  DISPUTED: ["REFUNDED", "CANCELLED"],
+  DISPUTED: ["CANCELLED"],
 };
 
 export function canAdminTransition(from: OrderStatus, to: OrderStatus): boolean {
