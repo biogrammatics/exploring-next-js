@@ -171,6 +171,49 @@ For Stripe webhook testing locally:
 stripe listen --forward-to localhost:3000/api/webhooks/stripe
 ```
 
+## Architecture
+
+Two Render services share one Postgres database. The web app serves every
+request and talks to the outside services directly; the worker only reads the
+job queue, scores constructs against Twist, and emails results.
+
+```mermaid
+flowchart LR
+  B["Browser<br/>customer · admin"] -->|HTTPS| W
+  B -.->|redirect to hosted checkout| S
+  subgraph Render
+    W["Next.js web service<br/>pages · API routes · Server Actions<br/>0.5c-512mb · pre-deploy: prisma db push"]
+    P[("Postgres<br/>44 Prisma models · Basic-256mb")]
+    K["Codon worker<br/>0.5c-512mb · worker/codon-worker.ts"]
+  end
+  W -->|Prisma| P
+  K -->|"polls PENDING every 5 s<br/>claims atomically · writes result"| P
+  W -->|create Checkout Session| S[Stripe]
+  S -->|"webhook, signature-verified"| W
+  W -->|rate quotes| SS[ShipStation]
+  W -->|presigned URLs| S3[AWS S3]
+  W -->|"magic links · invites"| R[Resend]
+  K -->|result email| R
+  K -->|"create + score constructs"| T[Twist Bioscience]
+```
+
+The browser also fetches files straight from S3 using presigned URLs the web
+service hands out. Only the worker imports the optimizer libraries; the web app
+just enqueues a job row.
+
+### Route inventory
+
+```bash
+npm run routes            # every page and API route with the guard it enforces
+npm run routes -- --json  # machine-readable
+```
+
+`scripts/route-inventory.mjs` walks `src/app` and reports each route's access
+level from the guard helper the file imports (`requireAdminPage`,
+`requireAdmin`, `requireUser`, `assertAdminAction`), plus Server Action counts
+and the `/api` paths client pages fetch. Run it after adding or moving routes;
+its output is the source for the site atlas.
+
 ## Deployment
 
 Deployed on Render from `main` via the Blueprint in `../render.yaml`:

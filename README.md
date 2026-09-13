@@ -182,6 +182,9 @@ Deployed on Render from `main` via the Blueprint in `render.yaml`:
 
 `render.yaml` is the source of truth for plans and environment variables; a Blueprint
 sync overwrites dashboard changes. See `AUDIT.md` (C4, H39) for the open deploy items.
+
+For a system diagram and the route inventory (`npm run routes`), see the
+Architecture section of `company-site/README.md`.
 - **PostgreSQL**: Managed database
 
 See `render.yaml` for configuration.
