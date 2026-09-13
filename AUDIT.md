@@ -1,202 +1,192 @@
 # BioGrammatics Company Site — Code Audit
 
 **Target:** `company-site/` (the codebase behind https://beta.biogrammatics.com)
-**Date:** 2026-06-02
-**Stack:** Next.js 16 (App Router) · React 19 · TypeScript (strict) · Prisma 7 / PostgreSQL · NextAuth v5 · Stripe · AWS S3 · Twist / Twilio / ShipStation · background codon-optimization worker (~21k LOC)
+**Date:** 2026-09-12 (supersedes the 2026-06-02 audit, preserved in git at `b17b01c`)
+**Stack:** Next.js 16 (App Router) · React 19 · TypeScript (strict) · Prisma 7 / PostgreSQL · NextAuth v5 · Stripe · AWS S3 · Twist / Twilio / ShipStation · background codon-optimization worker (~28k LOC incl. scripts)
 
-**Method:** Manual review of the security- and money-critical paths, plus six parallel deep-dive passes (auth/authorization, payments/order integrity, file access/S3, input validation/injection, data model/transactions, code quality/config). Every Critical finding was verified directly against the source. This report is a working document for remediation — findings carry a stable ID (`C#`, `H#`, `M#`, `L#`) so they can be referenced in issues and commits.
+**Method:** Whole-codebase review, not a diff review. Eight independent finder passes (three line-by-line correctness sweeps split by subsystem — auth/admin, commerce, codon pipeline — plus an authorization-invariant audit, a cross-file producer/consumer trace, and reuse, efficiency and root-cause passes). Every candidate that survived deduplication was independently re-verified against the source before being reported; 13 of 14 verified as confirmed, one as plausible, none refuted. The ten highest-severity findings were then fixed the same day in six themed commits (`e76d61d..9420262`) and this document records the resulting state.
+
+**Baseline at time of writing:** `tsc --noEmit` clean · 196 tests in 19 files passing (`vitest`) · eslint 3 errors, all pre-existing in untouched files (`benchmark-optimizers.ts` ×2, `cart-context.tsx` ×1) · working tree clean on `main`.
+
+Findings keep the stable-ID convention from the June audit (`C#` critical, `H#` high, `M#` medium, `L#` low). IDs 1–29 are the June findings; IDs 30+ are new in this review.
 
 ---
 
 ## Executive summary
 
-The fundamentals are strong: strict TypeScript with zero `any`/`@ts-ignore`, clean secret hygiene (nothing committed), **server-authoritative product pricing**, verified Stripe webhook signatures, integer-cents money math, private S3 with short-lived presigned URLs, thoughtful Prisma cascades, and good security headers.
+Two remediation rounds have landed since June. In July (`e9c1543`, `877515b`, `8fe8fe2`, `2c06c05`, `cbb80a6`) the payment-integrity criticals were closed: all product types are persisted on the order, shipping is recomputed server-side, the Stripe webhook is payment-aware and idempotent, and a test harness was introduced. On 2026-09-12 this review closed the access-control cluster and a second layer of correctness bugs: admin Server Actions are guarded, team logins no longer inherit the owner's role, product visibility is enforced by one predicate, shipping can no longer be omitted, the codon endpoint is bounded and its worker claims jobs atomically, and admin order views show what was actually bought.
 
-However, the site is **not yet safe to take real payments or onboard real customers.** There is a cluster of revenue-loss, data-loss, and broken-access-control issues (below), plus one architectural gap that undermines the whole auth model.
+**The site is now defensible against the attacks the June audit described, but it is not yet launch-ready.** Five items still block a public launch with real payments:
 
-### The root architectural issue: no `middleware.ts`
+1. **C4 — migrations.** Production schema is still synced by `prisma db push`. The build no longer touches the database and `--accept-data-loss` is gone, so a destructive change now fails the deploy instead of dropping data, but the migrations directory is frozen at January and `prisma migrate deploy` has not been adopted. Needs production database access to baseline.
+2. **H9 / H37 — no rate limiting** on magic-link, check-email, team invite, change-email or codon submission. Input is now validated and bounded, but unlimited outbound mail and user enumeration remain.
+3. **H10 / H39 — environment provisioning.** `render.yaml` still does not declare `NEXT_PUBLIC_BASE_URL` (checkout `success_url` becomes `undefined/...`), `AWS_*`, `SHIPSTATION_API_KEY`, or the `TWIST_*` tokens the worker needs. If these are set by hand in the Render dashboard the site works; the file does not reproduce that.
+4. **Public-site honesty (Codex 11, 12, 17).** Navigation links to `/subscriptions`, `/services` and `/path-to-protein` 404; the strain "Add to Cart" is an inert placeholder; privacy and cookie pages stamp today's date as "Last updated" and describe practices the code does not implement.
+5. **H38 — the worker has no per-job wall-clock deadline.** The optimizer is synchronous CPU work; the new length and pattern caps bound it, but a single pathological job still blocks the queue until it finishes.
 
-There is **no `middleware.ts`** anywhere in the project. The `authorized` callback in `company-site/src/lib/auth.config.ts:21` that is *meant* to gate `/admin` and `/account` is therefore **dead code** — in NextAuth v5 that callback only executes when wired up as middleware. Consequently **every route is protected only by its own inline check**, and several routes have gaps (see H6–H8, H11). Adding a `middleware.ts` baseline gate, plus a single shared `requireAdmin()` helper, closes a large fraction of the access-control findings at once.
+### Architecture note: authorization is centralized in helpers, not middleware
+
+There is still no `src/proxy.ts` (Next 16's name for `middleware.ts`), and the `authorized` callback in `auth.config.ts` remains dead code. The remediation chose a different mechanism: `src/lib/auth-guards.ts` is the single definition of "who is an admin", and grep confirms it is called by all 12 admin Server Actions, all 19 admin page/layout files, and every admin and Twist API handler. This is robust as long as new routes follow the convention (see `CLAUDE.md`). A `proxy.ts` matcher on `/admin` and `/api/admin` would add defense in depth at low cost and is still recommended.
 
 ### Severity legend
 
 | Tier | Meaning |
 |------|---------|
-| 🔴 Critical | Revenue loss, data loss, payment integrity, or trivial unauth abuse. Fix before processing real payments. |
-| 🟠 High | Broken access control or production breakage. Fix before public launch. |
+| 🔴 Critical | Revenue loss, data loss, payment integrity, or trivial unauth abuse. |
+| 🟠 High | Broken access control or production breakage. |
 | 🟡 Medium | Correctness / robustness / operational risk. |
 | 🟢 Low | Hygiene, cleanup, hardening. |
 
 ---
 
-## 🔴 Critical
+## Status of the June 2026 findings
 
-### C1 — Strain & generic-product purchases are charged but never recorded on the order
-**Location:** `company-site/src/app/api/checkout/route.ts:112-166` (charged) vs `:203-209` (only `vectorOrderItems` persisted)
-**What:** The strain and generic-`Product` branches build Stripe line items and add to the subtotal, but only `vectorItems` are written to the order. `prisma.strainOrderItem.create` and `prisma.orderItem.create` exist **nowhere** in the codebase, and the webhook never backfills them.
-**Impact:** The customer is charged, but the order has **no record of what they bought** for non-vector items. The account dashboard derives "purchased strains" from `StrainOrderItem`, so a strain buyer sees nothing and can even be denied access to the product they paid for. The generic-Product path is reachable today (`company-site/src/app/products/[id]/add-to-cart-button.tsx`); the strain path is latent (no add-to-cart UI yet).
-**Fix:** Collect `strainItems` and `productItems` exactly like `vectorItems` and create `strainOrderItems` / `items` in the same `order.create`. Add the missing availability gating to the strain branch while you're there (see H-note).
-
-### C2 — Shipping price is taken from the client and trusted
-**Location:** `company-site/src/app/api/checkout/route.ts:169-191`
-**What:** `shippingRate.costCents` comes straight from the request body and is used as both the Stripe line-item amount and the stored `order.shippingCost`. It is never re-validated against `company-site/src/app/api/shipping/rates/route.ts`.
-**Impact:** A user editing the POST body can set shipping to `$0` (or skip it). Direct revenue loss on every order. (Product prices are correctly looked up server-side — shipping is the one client-controlled price.)
-**Fix:** On the server, re-call the rate provider for the submitted address, re-run the same filter/handling-fee pipeline, find the rate matching the submitted `serviceCode`, and use that server-computed cost. Reject if no match.
-
-### C3 — Webhook marks orders PAID without confirming payment, and is not idempotent
-**Location:** `company-site/src/app/api/webhooks/stripe/route.ts:28-82`
-**What:** On `checkout.session.completed` it sets `status: "PAID"` without checking `session.payment_status === "paid"`, and with no dedup guard. Stripe delivers events at-least-once; a replay re-runs the whole block (including the user-creation path, which can throw — see H13).
-**Fix:** Guard the transition with `updateMany({ where: { id: orderId, status: 'PENDING' }, data: { status: 'PAID' } })` and treat `count === 0` as already-processed; verify `payment_status === 'paid'`; optionally persist `event.id` in a processed-events table.
-
-### C4 — `prisma db push --accept-data-loss` runs on every production deploy
-**Location:** `render.yaml:13`, `company-site/package.json:7`
-**What:** The deploy syncs the schema with `db push` (the `--accept-data-loss` flag is in `render.yaml`), bypassing the stale `company-site/prisma/migrations/` folder. The schema has grown substantially with no corresponding migrations.
-**Impact:** The next time a model is removed from `schema.prisma` (e.g. the dead `CustomProject` — see L-cleanup), the deploy will **silently DROP those tables and their rows** on the free-tier Postgres, which has no automated backups. One careless schema edit destroys production data.
-**Fix:** Switch production to `prisma migrate deploy`; generate real migrations with `prisma migrate dev` locally; remove `--accept-data-loss`. Baseline the current prod schema into a migration first (`prisma migrate diff` + `migrate resolve`). Take a `pg_dump` before each deploy until migrations are adopted.
-
-### C5 — Codon-optimization endpoint is an unauthenticated, unbounded DoS / cost amplifier
-**Location:** `company-site/src/app/api/codon-optimization/route.ts:10-77`; worker `company-site/worker/codon-worker.ts`; ReDoS sink `company-site/src/lib/dp-optimizer.ts:244`
-**What:** The POST accepts anonymous requests (`userId: session?.user?.id || null`) with **no rate limit and no sequence-length cap**. Jobs are processed by a single serial worker with **no per-job timeout**. Worse, `excludedPatterns` from the body is passed straight into `new RegExp(...)` inside the optimizer's innermost loop — a catastrophic-backtracking (ReDoS) primitive.
-**Impact:** Any anonymous user can flood the queue or pin the worker indefinitely with one crafted request, blocking all legitimate jobs and burning Twist API + Resend quota (real money).
-**Fix:** Require auth or a strict per-IP/per-email rate limit on the POST; reject `proteinSequence` over a hard cap (e.g. 5,000 aa) *before* the DB insert; restrict `excludedPatterns` to a DNA/IUPAC charset (or run them under a linear-time regex engine / per-pattern timeout); add a wall-clock timeout per job in the worker and mark over-runs `FAILED`.
-
----
-
-## 🟠 High
-
-### H6 — Team-email login silently adopts the account owner's identity *and role*
-**Location:** `company-site/src/app/api/auth/verify-magic-link/route.ts:73-114`, with role read at `company-site/src/lib/auth.ts:31`
-**What:** A team email resolves to `authorizedEmail.user` (the owner), and the session's `role` is read from that owner row. The route also hand-rolls the session cookie directly, bypassing NextAuth's CSRF protections; magic-link tokens live 24h, sessions 30 days.
-**Impact:** If a team email is added to an admin's account, that team member logs in **as an admin**. There is no distinction between owner and team-member sessions — privilege escalation by design.
-**Fix:** Give team-member sessions a distinct identity and enforce least privilege; never let a team email inherit an admin role. Prefer NextAuth's built-in email provider over the hand-rolled route, or add CSRF protection and shorten token life.
-
-### H7 — Any logged-in user can download files for non-public vectors
-**Location:** `company-site/src/app/api/admin/files/[fileId]/download/route.ts:33-39`
-**What:** The VectorFile branch only checks `session?.user` (not admin) for products whose `productStatus.isAvailable` is false. Access is keyed on the file CUID alone.
-**Impact:** Any free account can download SnapGene maps / GenBank / FASTA / product sheets for unreleased or withheld products by guessing/iterating file IDs.
-**Fix:** For non-public files require ADMIN/SUPER_ADMIN (mirror the lot-file branch), or an explicit entitlement check. Keep the public branch as the only unauthenticated path.
-
-### H8 — Any logged-in user can list lot QC/COA/sequencing files (IDOR)
-**Location:** `company-site/src/app/api/admin/vectors/[id]/lots/[lotId]/files/route.ts:97-111`
-**What:** The GET checks only `session?.user` while the sibling POST correctly requires admin.
-**Impact:** Confidential manufacturing/QC data (file names, types, S3 keys for QC_REPORT/COA/SEQUENCING_DATA) leaks to any customer.
-**Fix:** Require ADMIN/SUPER_ADMIN in the GET, matching the rest of `/api/admin/*`.
-
-### H9 — No rate limiting on any auth / email endpoint; user enumeration
-**Location:** `company-site/src/app/api/auth/send-magic-link/route.ts`, `.../check-email/route.ts`, `company-site/src/app/api/account/team/route.ts`, `.../change-email/route.ts`
-**What:** All send Resend mail / mint tokens on demand with no throttle. `check-email` returns distinct responses for primary / team / pending-invite / none.
-**Impact:** Mail-bomb arbitrary third-party addresses (cost + domain reputation), brute force, and harvest which emails are customers/admins.
-**Fix:** Per-IP + per-identifier rate limits (e.g. 3–5 sends / 15 min); return a uniform response from `check-email`.
-
-### H10 — `NEXT_PUBLIC_BASE_URL` is undefined in production → checkout redirects break
-**Location:** `company-site/src/app/api/checkout/route.ts:218-219`; absent from `render.yaml`
-**What:** `success_url`/`cancel_url` interpolate `process.env.NEXT_PUBLIC_BASE_URL`, which is only in `.env.example` (localhost) and **not provisioned in `render.yaml`**. In prod it resolves to `"undefined/checkout/success?..."`.
-**Impact:** Stripe rejects the invalid `success_url` → checkout 500s, unless the var is set manually in the Render dashboard out-of-band.
-**Fix:** Add `NEXT_PUBLIC_BASE_URL: https://beta.biogrammatics.com` to `render.yaml`, or derive the base URL from the request origin / `NEXTAUTH_URL` server-side.
-
-### H11 — SUPER_ADMIN is locked out of order & user management (inconsistent authz)
-**Location:** `company-site/src/app/api/admin/orders/[id]/route.ts` and `company-site/src/app/api/admin/users/[id]/route.ts` use `role !== "ADMIN"`
-**What:** These reject SUPER_ADMIN, while other routes use the `["ADMIN","SUPER_ADMIN"]` allowlist. Authz is duplicated across ~13 handlers with at least two different code paths.
-**Fix:** Extract one `requireAdmin()` / `requireRole([...])` helper and call it in every admin handler.
-
-### H12 — Order status accepts any value with no transition guard
-**Location:** admin order PATCH (`company-site/src/app/api/admin/orders/[id]/route.ts`) + `company-site/src/app/admin/orders/[id]/order-status-form.tsx`
-**What:** An unvalidated `status` string is spread into `order.update`. A `CANCELLED` order can be set back to `PAID`, a `DELIVERED` order un-shipped, and an invalid enum value 500s.
-**Fix:** Validate against the `OrderStatus` enum (Zod) and enforce a transition matrix (terminal states can't be reopened; no skipping backward).
-
-### H13 — Webhook ↔ NextAuth `createUser` race on guest email
-**Location:** `company-site/src/app/api/webhooks/stripe/route.ts:41-69` and `company-site/src/lib/auth.ts:38-48`
-**What:** Both paths create a `User` and link orders by `customerEmail` with no transaction. Concurrent execution → P2002 unique-constraint 500, and the order can be left `PENDING`.
-**Fix:** Use an idempotent `upsert` on `email` inside a `$transaction`; have both paths share one helper.
-
-### H14 — No quantity validation in checkout
-**Location:** `company-site/src/app/api/checkout/route.ts:71-166`
-**What:** `item.quantity` (negative / zero / fractional / huge) is trusted in the subtotal math and persisted. Stripe rejects non-positive line quantities, but a negative subtotal can still be stored, and the cents math can be corrupted.
-**Fix:** Validate each quantity: `Number.isInteger(q) && q > 0 && q <= MAX`. Re-assert `subtotal === Σ(lineItems)` and `total === subtotal + shipping`.
-
-### H15 — Upload routes have no size limit and no content-type allowlist
-**Location:** `company-site/src/app/api/admin/vectors/[id]/files/route.ts`, `.../lots/[lotId]/files/route.ts`, `company-site/src/app/api/admin/vectors/image/route.ts`
-**What:** Each does `await file.arrayBuffer()` → `Buffer.from(...)` with no `file.size` check (no `bodySizeLimit` configured), and validates only the `fileType` enum label, not the bytes. Separately, `Vector.thumbnailBase64` is written unbounded (server action does no length/format check) and inlined into every catalog page render.
-**Impact:** A multi-GB upload OOMs the server; arbitrary content can be stored under any file-type label; a huge thumbnail bloats every page. Admin-gated, which mitigates — but admin is a magic-link role.
-**Fix:** Reject `file.size` over a threshold (e.g. 50 MB); validate real content type (magic bytes) against an allowlist; cap and format-check `thumbnailBase64` (or move thumbnails to S3).
+| ID | Finding | Status | Resolved in / notes |
+|----|---------|--------|---------------------|
+| C1 | Strain & product purchases charged but not recorded | ✅ Fixed | `e9c1543` — all three item types persisted; totals asserted |
+| C2 | Shipping price trusted from client | ✅ Fixed | `e9c1543` recomputed from ShipStation; `4ffb044` closed the remaining hole where *omitting* the rate yielded $0 shipping |
+| C3 | Webhook not payment-aware / not idempotent | ✅ Fixed | `877515b` — `payment_status` check, `ProcessedWebhookEvent`, transaction, refund/dispute/async-failure handlers |
+| C4 | `db push --accept-data-loss` on deploy | 🟡 Partial | `9420262` — `npm run build` no longer runs `db push`; flag removed from `render.yaml`. **Baseline + `migrate deploy` still open** |
+| C5 | Codon endpoint unbounded / ReDoS | ✅ Fixed (except throttling) | `273d351` — hard 10,000 aa cap, IUPAC-plus-bounded-quantifier pattern grammar, email required for guests, uuid ids. Rate limiting tracked as H37 |
+| H6 | Team login inherits owner identity and role | ✅ Fixed | `78b289e` — Session flagged, role forced to USER, identity-changing routes reject team sessions, primary user resolved first |
+| H7 | Any user can download non-public vector files | ✅ Fixed | `8fe8fe2`; `4ffb044` added the `isPublic` half of the predicate |
+| H8 | Any user can list lot QC files | ✅ Fixed | `8fe8fe2`, tests in `cbb80a6` |
+| H9 | No rate limiting; user enumeration | ❌ Open | See H37 |
+| H10 | `NEXT_PUBLIC_BASE_URL` missing from `render.yaml` | ❌ Open | Still absent; see H39 |
+| H11 | SUPER_ADMIN locked out of order/user detail | ✅ Fixed | `e0736d3` / `4ffb044` via `requireAdmin()` |
+| H12 | Order status unvalidated, no transitions | ✅ Fixed | `4ffb044` — Zod enum + `ADMIN_ORDER_TRANSITIONS`; form checks `response.ok` |
+| H13 | Webhook ↔ createUser race | ✅ Fixed | `877515b` upsert-in-transaction; `78b289e` made both sides agree on email case |
+| H14 | No quantity validation | ✅ Fixed | `e9c1543` — positive integer ≤ 1000 |
+| H15 | Uploads: no size limit, no content check; unbounded thumbnail | ❌ Open | `file.size` is stored, never checked; thumbnail still base64 in DB |
+| M16 | Dangling PENDING order on Stripe failure | ❌ Open | Order still created before the Stripe call; catch does not clean up |
+| M17 | No tax | ❌ Open | `taxAmount` never computed |
+| M18 | Webhook ignores refunds/disputes | ✅ Fixed | `877515b` |
+| M19 | State-changing GETs (accept-invite, verify-email-change) | ❌ Open | Both still mutate on GET |
+| M20 | Misleading comment in verify-email-change | ✅ Fixed | `78b289e` — route now actually checks team emails |
+| M21 | `notificationEmail` / `proteinName` unvalidated | ✅ Fixed | `273d351` |
+| M22 | Worker claim not atomic; no stale sweep | ✅ Fixed | `273d351` — `updateMany` guarded on PENDING; 30-min stale requeue; graceful SIGTERM |
+| M23 | Free-tier hosting for a transactional store | ❌ Open | Unchanged |
+| M24 | No tests; no error/not-found/loading boundaries; no robots/sitemap | 🟡 Partial | 196 tests now cover optimizer core, validation, auth guards, checkout, webhook, admin routes, team routes. **Boundaries and SEO files still absent** |
+| L25 | `Math.random()` for ambiguous residues | ❌ Open | `codon-optimization.ts:268-270` |
+| L26 | Unsanitized filename in `Content-Disposition` | ❌ Open | `s3.ts:38` |
+| L27 | `process.env.X!` assertions, no fail-fast `env.ts` | ❌ Open | `s3.ts`, `stripe.ts` |
+| L28 | `.env.example` missing `AWS_*`, `SHIPSTATION_API_KEY` | ❌ Open | Also still documents `AUTH_URL` while code reads `NEXTAUTH_URL` |
+| L29 | Dead/duplicate code (otp.ts, legacy models, scripts) | ❌ Open | See L44 for the current inventory |
 
 ---
 
-## 🟡 Medium
+## New findings in this review
 
-- **M16 — Dangling PENDING orders on Stripe failure.** The order row is created before the Stripe call (`company-site/src/app/api/checkout/route.ts:186`); a Stripe error orphans it. Delete-on-failure, or create the order after Stripe succeeds. Add a sweep for old PENDING orders with null `stripeSessionId`.
-- **M17 — No tax.** `Order.taxAmount` exists but is never computed or charged; a CA seller collects no in-state sales tax. Enable Stripe Tax (`automatic_tax`) or compute server-side.
-- **M18 — Webhook ignores refunds / disputes / async failures.** Only `completed` and `expired` are handled; refunded orders stay `PAID`. The `OrderStatus` enum also lacks `REFUNDED`/`FAILED`.
-- **M19 — State-changing GET requests.** `company-site/src/app/auth/accept-invite/page.tsx` and `company-site/src/app/api/account/verify-email-change/route.ts` mutate state on load → mail-scanners/prefetchers auto-trigger them, and neither verifies the visitor controls the target mailbox. Move to POST + explicit confirmation; always enforce token expiry.
-- **M20 — `verify-email-change` has a comment claiming it repoints team emails — but no code does.** Implement it or delete the misleading comment (`company-site/src/app/api/account/verify-email-change/route.ts:69-70`).
-- **M21 — Unvalidated `notificationEmail` / unbounded `proteinName`** in the codon route → arbitrary-recipient mail at scale and unbounded strings into Twist construct names / email subjects. Add `z.string().email()` and length caps.
-- **M22 — Worker job claim isn't atomic.** `findFirst` then a separate `update` to PROCESSING; a crash strands jobs in PROCESSING with no requeue. Claim with `updateMany({ where: { status: 'PENDING' } })` and add a stale-PROCESSING sweep.
-- **M23 — Operational tiering.** Free-tier web (cold starts delay webhook delivery) + free-tier Postgres (expires, connection-capped) for a transactional store, with a paid worker polling every 5s. Move Postgres to a paid plan; consider event-triggering the worker instead of tight polling.
-- **M24 — No tests; no `error.tsx` / `not-found.tsx` / `loading.tsx` / `global-error.tsx`; no robots/sitemap.** The core optimizer (the main IP) has no CI tests. Add unit tests for `dp-optimizer`, `beam-search-optimizer`, `amino-acid-validation`, and the webhook handler; add route boundaries.
+### Resolved on 2026-09-12
 
----
+| ID | Finding | Commit |
+|----|---------|--------|
+| 🔴 **C30** | **Admin Server Actions had no auth check.** Twelve inline `"use server"` actions (create/update/delete vector, strain, lot; delete vector-file and lot-file) relied on the admin layout's redirect, which does not run before an action executes. Action IDs ship in public chunks; `createVector`/`createStrain` were callable with the ID alone and `deleteFile` took its target from form data. Every action now calls `assertAdminAction()` first; deletes are scoped to their parent; all admin pages call `requireAdminPage()` themselves. | `e0736d3` |
+| 🟠 **H31** | **Admin order list/detail and both admin order APIs loaded only the legacy `items` relation**, so every vector or strain order rendered as "0 items" with an empty table under a non-zero total. Shared `orderLineInclude` / `flattenOrderLines` now used everywhere. | `4ffb044` |
+| 🟠 **H32** | **Terminal `*` passed API validation but failed the worker's whitelist**, so every UniProt/FASTA-style paste produced a FAILED job. One trailing stop is stripped; internal stops are rejected with a position. | `273d351` |
+| 🟠 **H33** | **Checkout and webhook stored raw mixed-case emails while auth routes lowercased**, creating a second User the customer could never log into with their paid order attached to the first. `normalizeEmail` is now used on every identity path; re-link queries match case-insensitively. | `78b289e` |
+| 🟡 **M34** | **Re-inviting a revoked team email always 500'd** on `@@unique([email,userId])` because DELETE soft-revokes and POST only looked for ACTIVE/PENDING rows. Revoked rows are reactivated. | `78b289e` |
+| 🟡 **M35** | **`/auth/error` read `searchParams` synchronously** (a Promise in Next 16), so every error showed the generic message; `InvalidToken`/`TokenExpired`/`EmailAlreadyInUse` had no copy at all. | `78b289e` |
+| 🟡 **M36** | **Four different visibility predicates.** Vectors ignored `isPublic` (which no admin form wrote), the strain detail ignored `isAvailable`, the strain checkout branch checked neither. One `visibility.ts` module now serves catalog, detail, file and checkout paths; `Vector.isPublic` is editable. | `4ffb044`, `e0736d3` |
 
-## 🟢 Low / cleanup
+### Open
 
-- **L25 — `Math.random()` in codon resolution** (`company-site/src/lib/codon-optimization.ts:152`): the same protein yields different DNA, and ambiguous `X` is resolved to a *random* amino acid (silently fabricates sequence). Reproducibility concern for a scientific tool — seed deterministically or reject ambiguous codes.
-- **L26 — Filename used unsanitized in `Content-Disposition`** (`company-site/src/lib/s3.ts:38`) and stored unsanitized at upload. Strip control chars / use RFC 5987 encoding.
-- **L27 — Non-null env assertions** (`process.env.X!`) in `company-site/src/lib/stripe.ts:3` and `company-site/src/lib/s3.ts:8-9` crash at runtime if unset. Add a fail-fast `env.ts` that validates required vars at startup.
-- **L28 — `.env.example` is missing `AWS_*` and `SHIPSTATION_API_KEY`** (both read by code). Also note: code reads `NEXTAUTH_URL` (provisioned in `render.yaml`) while `.env.example` documents `AUTH_URL` — harmless in prod, confusing for local/dev setup.
-- **L29 — Dead / duplicate code:**
-  - `company-site/src/lib/otp.ts` — unimported, dead.
-  - `OrderItem` model — unused legacy (app uses `VectorOrderItem` / `StrainOrderItem`).
-  - **Two parallel project systems:** `CustomProject` / `Protein` / `ProjectStatus` vs `Project` / `ProjectProtein` / `ProjectStatus2`. The schema comments say the latter "replaces" the former, but both are live (`CustomProject` is still used in 5 pages). Finish the migration and drop the legacy models (under real migrations — see C4).
-  - ~15 one-off analysis/benchmark/export scripts in `company-site/worker/` and the repo root (two untracked: `worker/optimize-batch-cis.ts`, `worker/optimize-cas9.ts`). Move out of the deployed worker dir or `.gitignore` them. Keep only `worker/codon-worker.ts`.
+#### 🟠 H37 — No rate limiting on auth, email or job-submission endpoints (supersedes H9)
+`send-magic-link`, `check-email`, `account/team` POST, `change-email` and `codon-optimization` POST are unthrottled. `check-email` still returns four distinguishable shapes (primary / team / pending-invite / none), so a customer list can be classified in one pass. Inputs are now validated, but unlimited outbound Resend mail to third parties remains possible.
+**Fix:** per-IP and per-identifier limits (e.g. 5 sends / 15 min) via Upstash Ratelimit or Arcjet in a small `lib/rate-limit.ts`; make `check-email` return a uniform response.
+
+#### 🟠 H38 — Worker has no per-job wall-clock deadline
+`optimizeCodon` is synchronous CPU work called inline in the poll loop (`worker/codon-worker.ts`). Input caps bound the worst case, but a 10,000 aa job with 50 patterns still holds the single worker for its full duration and no `Promise.race` can interrupt synchronous code.
+**Fix:** run the optimizer in a `worker_threads` Worker with `terminate()` on a deadline (e.g. 10 min); mark the job FAILED with a "timed out" reason.
+
+#### 🟠 H39 — `render.yaml` does not declare the environment the code reads (supersedes H10)
+Missing from the web service: `NEXT_PUBLIC_BASE_URL` (checkout `success_url`), `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_S3_BUCKET`, `SHIPSTATION_API_KEY`, `TWIST_*`, `TWILIO_*`. Missing from the worker service: `TWIST_AUTH_TOKEN`/`TWIST_END_USER_TOKEN`, so `getHeaders()` throws inside `scoreTwist` and every job silently records `twistScore: null`. `STRIPE_PUBLISHABLE_KEY` is declared but nothing reads it.
+**Fix:** declare each as `sync: false` in `render.yaml`; add a fail-fast `lib/env.ts` (also closes L27).
+
+#### 🟡 M40 — Exclusion patterns are comma-joined in storage, so `{m,n}` quantifiers are unsupported
+The pattern grammar introduced in `273d351` rejects commas with a clear message rather than silently splitting (the pre-fix behaviour), but the project's own `exclusions.txt` uses `TAAC[ACGT]{1,19}[TC]AG`-style patterns that users cannot enter.
+**Fix:** store `excludedEnzymeNames` as a JSON array (or newline-delimited) and split accordingly in the worker.
+
+#### 🟡 M41 — `SECURITY_README.md` describes an encryption feature that does not exist
+It names `src/lib/encryption.ts`, `POST /api/account/enable-encryption`, `isEncrypted`/`encryptionIV` columns and guarantees ("company cannot decrypt user data") with no implementation. Sequences are plaintext and readable by any admin.
+**Fix:** delete the document or retitle it as a design proposal with an explicit "not implemented" banner.
+
+#### 🟡 M42 — Debug tooling ships in the production admin navigation
+`/admin/twist-test` (633 lines), `/admin/twilio-test`, and `api/twist/{test,config,probe,resource,vectors,constructs,constructs/describe}` are development probes; `api/twist/resource` is an admin-authenticated generic GET proxy against Twist with production credentials. `lib/twist.ts` defaults `env` to `"staging"` and the production worker relies on that default.
+**Fix:** gate under `NODE_ENV !== "production"` or an `/admin/dev` group; make `env` a required argument in `lib/twist.ts`.
+
+#### 🟡 M43 — Efficiency
+- `strains/page.tsx`, `admin/vectors/page.tsx`, `admin/strains/page.tsx` fetch `thumbnailBase64` (tens of KB per row) they never render — use `select`.
+- `admin/orders`, `admin/users`, `admin/vectors`, `admin/strains` lists and their APIs are unpaginated `findMany` with full relation trees.
+- `admin/page.tsx` runs four independent aggregates serially after an existing `Promise.all`.
+- Checkout looks up each cart line in a separate sequential round trip.
+- `dp-optimizer.ts` `maxPatternLength` defaults to 100 while the longest real pattern is 26; measured 40% faster with byte-identical output at 30.
+- No catalog page sets `revalidate`; every visit hits Postgres.
+
+#### 🟡 M44 — Orphaned PENDING orders and cart cleared too early (supersedes M16)
+The order row is created before the Stripe session; a Stripe failure returns 500 and leaves a PENDING order with no `stripeSessionId` that no webhook will ever expire. The client also calls `clearCart()` before the redirect, so a user who cancels on Stripe returns to an empty cart.
+
+#### 🟢 L44 — Duplication and dead code (supersedes L29)
+- `formatPrice` declared 21× and `formatDate` 13× (three different formats) — add `lib/format.ts`.
+- Genetic-code table defined 4× (`beam-search-optimizer`, `dp-optimizer`, `repeat-breaker`, `codon-optimization`), `parseExclusionPatterns` 3× with differing grammars, `translateDna` 2×.
+- `src/lib/otp.ts`, `product-form.tsx`, `thumbnail-upload.tsx`: zero importers. Twilio's `formatPhoneNumber`/`sendOtpCode`/`sendPhoneVerification` and three OTP Zod schemas: unused.
+- Four root-level scripts (`analyze-proteins.ts`, `benchmark-optimizers.ts`, `score-calm-cav.ts`, `test-tripletcounts.ts`) hard-code `/Users/studio/...` paths and are compiled by every `next build`; ten one-off scripts in `worker/` re-implement `parseFasta` nine times while `src/lib/fasta-parser.ts` has no non-test importer.
+- Legacy `Product`/`OrderItem` path is still reachable from the home page (`/products`) and `CustomProject` is still read by four account pages.
+
+#### 🟢 L45 — Cart hydrates `localStorage` without a shape check
+`cart-context.tsx:39` passes `JSON.parse(stored)` straight to state; a non-array value throws inside the root-layout provider and takes down every route until storage is cleared. Validate with Zod and discard on failure.
+
+#### 🟢 L46 — Public-site items from the Codex review remain unchanged
+Dead navigation links (Codex 11), inert strain add-to-cart (12), legal pages with a live "Last updated" date and unverifiable claims (17), no mobile navigation or reduced-motion handling (14), no SEO baseline (15). See `CODEX_ACTIONS.md` for the per-item log.
 
 ---
 
 ## What's genuinely solid (keep it this way)
 
-- **Product prices are server-authoritative** — every line-item amount is fetched fresh from the DB; the client-sent cart price is ignored at checkout. (Shipping is the one exception — see C2.)
-- **Stripe webhook signatures are verified** with `constructEvent` on the raw body before any processing.
-- **Money is integer cents** throughout the schema and checkout.
-- **S3 is private** — presigned GET URLs with 1-hour expiry, no public ACLs; no SSRF surface; image `remotePatterns` locked to one host.
-- **Account-route IDOR is correctly prevented** — profile/team/email-change queries are scoped to `session.user.id`.
-- **No role-mutation API exists** — role defaults to `USER` and is read from the DB into the session, never from user input.
-- **Strong token randomness** (`crypto.randomBytes(32)`) with expiry and single-use on all token flows.
-- **No raw SQL / `eval` / shell** anywhere; all queries go through the Prisma query builder.
-- **TypeScript discipline** — `strict: true`, zero `any`, zero `@ts-ignore`, zero `eslint-disable` in app code; build does not suppress type/lint errors.
-- **Clean secret hygiene** — nothing committed, history is clean, `.gitignore` is correct, the generated Prisma client is correctly ignored.
-- **Good security headers** (X-Frame-Options DENY, nosniff, HSTS); Twist/Twilio admin endpoints are properly role-gated.
+- **Server-authoritative pricing and shipping.** Product prices come from the DB; shipping is quoted by the server for the submitted address and can no longer be omitted; persisted totals are asserted against Stripe line items.
+- **Webhook integrity.** Signature verification on the raw body, `payment_status` gate, processed-event table, conditional state transitions, refund/dispute/async-failure handling — all inside one transaction.
+- **One authorization vocabulary.** `auth-guards.ts` is called by every admin action, page and handler; team sessions can never be admin; tests cover anonymous / user / admin / super-admin / team-login for the guard and for representative routes.
+- **One identity vocabulary.** `normalizeEmail` on every create/match path; case-insensitive re-linking for legacy rows.
+- **One visibility vocabulary.** `visibility.ts` predicates and `PURCHASED_ORDER_STATUSES` replace copied literals.
+- **Bounded scientific intake.** Length cap, pattern grammar that cannot backtrack catastrophically, sanitized names, validated notification email, unguessable job ids, atomic claims with stale recovery.
+- **Deploy no longer silently destroys data**, and `npm run build` cannot touch a database.
+- **Test suite exists and is fast** (196 tests, ~0.4 s), with fixtures and a documented mocking pattern.
+- Unchanged from June: integer-cents money, private S3 with short-lived presigned URLs, strong random tokens, no raw SQL, strict TypeScript, clean secret hygiene, good security headers.
 
 ---
 
-## Suggested remediation roadmap
+## Remediation roadmap
 
-**Phase 1 — Revenue & data integrity (do first)**
-- [ ] C1 — persist strain & product order items
-- [ ] C2 — recompute shipping server-side
-- [ ] C3 — gate webhook on `payment_status` + add idempotency
-- [ ] H14 — validate quantities; assert totals
+**Phase A — Finish production safety (blockers)**
+- [ ] C4 — `pg_dump`; `prisma migrate diff --from-url $PROD --to-schema-datamodel prisma/schema.prisma --script` → baseline migration; `prisma migrate resolve --applied`; `render.yaml` → `prisma migrate deploy && npm run build`
+- [ ] H37 — rate limiting + uniform `check-email`
+- [ ] H39 — declare all env vars in `render.yaml`; add fail-fast `lib/env.ts` (closes L27)
+- [ ] H38 — optimizer in a `worker_threads` Worker with a deadline
+- [ ] `src/proxy.ts` matcher on `/admin`, `/api/admin`, `/api/twist` (defense in depth)
 
-**Phase 2 — Deploy safety**
-- [ ] C4 — switch to `prisma migrate deploy`; remove `--accept-data-loss`; baseline current schema
-- [ ] H10 — set `NEXT_PUBLIC_BASE_URL` in `render.yaml`
+**Phase B — Correctness and robustness**
+- [ ] M44 — create the Stripe session first, or delete the order on failure; clear the cart on `/checkout/success`, not before redirect
+- [ ] M19 — POST + confirmation for accept-invite and verify-email-change
+- [ ] H15 — upload size limits and magic-byte checks; thumbnails to S3
+- [ ] M40 — JSON-array storage for exclusion patterns
+- [ ] L45 — validate cart storage
+- [ ] M17 — Stripe Tax
 
-**Phase 3 — Access control**
-- [ ] Add `middleware.ts` baseline gate for `/admin` + `/account`
-- [ ] Extract a shared `requireAdmin()` helper → fixes H11 and standardizes H7/H8
-- [ ] H7 / H8 — lock down file download + lot-file listing to admin
-- [ ] H6 — separate team-member session identity from the owner; never inherit admin role
-- [ ] H9 — add rate limiting; de-enumerate `check-email`
-- [ ] H12 — validate order status transitions
+**Phase C — Public site honesty (before any marketing push)**
+- [ ] Codex 11 — implement or remove `/subscriptions`, `/services`, `/path-to-protein`
+- [ ] Codex 12 — wire strain add-to-cart (persistence already exists) or show "Request availability"
+- [ ] Codex 17 — fixed legal revision dates; remove unverifiable claims; counsel review
+- [ ] M24 remainder — `error.tsx`, `not-found.tsx`, `loading.tsx`, `sitemap.ts`, `robots.ts`; Codex 14/15
 
-**Phase 4 — Codon-optimization hardening**
-- [ ] C5 — auth/rate-limit the POST, cap sequence length, validate `excludedPatterns`, add worker per-job timeout
-- [ ] M21 / M22 — validate notification email; atomic job claim + stale sweep
-
-**Phase 5 — Robustness & cleanup**
-- [ ] M16–M20, M23–M24, L25–L29
+**Phase D — Cleanup**
+- [ ] M41 — delete or relabel `SECURITY_README.md`
+- [ ] M42 — gate debug tooling; required `env` in `lib/twist.ts`
+- [ ] M43 — `select` on list pages, pagination, `Promise.all`, `maxPatternLength`, `revalidate`
+- [ ] L44 — `lib/format.ts`, `lib/genetic-code.ts`, delete dead modules, move scripts out of the compiled tree
+- [ ] L25, L26, L28, M23
 
 ---
 
-## Notes on scope & corrections
+## Notes on scope
 
-Two findings raised during the review were verified as **false** and excluded: `render.yaml` is **not** missing — it is tracked at the repo root — and the generated Prisma client is **not** committed (it is correctly gitignored). Both were artifacts of a sub-review scoped only to `company-site/`.
-
-This document reflects the state of `main` as of 2026-06-02. Severities assume the site is moving toward taking real payments; if it remains an internal/closed beta, the access-control items (H6–H9) and DoS item (C5) drop in urgency, but the revenue/data-loss items (C1–C3) and deploy-safety item (C4) do not.
+This audit covers `company-site/` and the repo-root deploy configuration. It does not cover the scientific correctness of the optimizers beyond the input/validation seam (one offline-only discrepancy was noted in passing: `repeat-breaker.ts:528` counts never-active pairs as "fixed"). The public-site content findings are carried from the Codex review rather than re-derived. Severities assume the site is moving toward taking real payments.
