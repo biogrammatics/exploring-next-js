@@ -1,6 +1,8 @@
 databases:
   - name: biogrammatics-nextjs-db
-    plan: free
+    # Basic-256mb (0.1 CPU, 256 MB). The database was upgraded from free in the
+    # dashboard; a Blueprint declaring a lower plan fails sync ("cannot downgrade").
+    plan: 0.1c-256mb
     databaseName: biogrammatics
     user: biogrammatics
 
