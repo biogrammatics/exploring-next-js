@@ -18,7 +18,7 @@ services:
     healthCheckPath: /
     envVars:
       - key: NODE_VERSION
-        value: 20
+        value: "20"
       - key: DATABASE_URL
         fromDatabase:
           name: biogrammatics-nextjs-db
@@ -44,13 +44,15 @@ services:
   - type: worker
     name: biogrammatics-codon-worker
     runtime: node
-    plan: starter  # $7/month - required for background workers
+    # Render renamed instance plans to cpu/memory names; "starter" (0.5 CPU, 512 MB,
+    # $7/month) is now 0.5c-512mb. Legacy names fail Blueprint sync validation.
+    plan: 0.5c-512mb
     rootDir: company-site
     buildCommand: npm install && npx prisma generate
     startCommand: npx tsx worker/codon-worker.ts
     envVars:
       - key: NODE_VERSION
-        value: 20
+        value: "20"
       - key: DATABASE_URL
         fromDatabase:
           name: biogrammatics-nextjs-db
