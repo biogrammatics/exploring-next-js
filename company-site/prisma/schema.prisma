@@ -101,6 +101,10 @@ model Session {
   // role and cannot change account identity (email, team membership).
   isTeamLogin  Boolean  @default(false)
   teamEmail    String?
+
+  // See src/lib/session-version.ts. Null means "minted before versioning";
+  // the adapter treats such rows as invalid and deletes them on next use.
+  authVersion  Int?
 }
 
 model VerificationToken {

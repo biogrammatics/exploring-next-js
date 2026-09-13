@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { requireUser } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { normalizeEmail } from "@/lib/identity";
+import { rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 import { Resend } from "resend";
 import crypto from "crypto";
 
@@ -64,6 +65,9 @@ export async function GET() {
 // POST - Invite a new team email
 export async function POST(request: NextRequest) {
   try {
+    const limited = rateLimitResponse(RATE_LIMITS.teamInvite, request.headers);
+    if (limited) return limited;
+
     const guard = await requireAccountOwner();
     if (guard.response) return guard.response;
     const { session } = guard;
@@ -220,14 +224,26 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Update status to revoked
-    await prisma.authorizedEmail.update({
-      where: { id: emailId },
-      data: {
-        status: "REVOKED",
-        revokedAt: new Date(),
-      },
-    });
+    // Revoke the membership and end the colleague's live sessions in the
+    // same transaction, so access stops on their next request rather than
+    // when a 30-day session happens to expire. The adapter also re-checks
+    // membership on every lookup as a second line of defence.
+    await prisma.$transaction([
+      prisma.authorizedEmail.update({
+        where: { id: emailId },
+        data: {
+          status: "REVOKED",
+          revokedAt: new Date(),
+        },
+      }),
+      prisma.session.deleteMany({
+        where: {
+          userId: session.user.id,
+          isTeamLogin: true,
+          teamEmail: authorizedEmail.email,
+        },
+      }),
+    ]);
 
     return NextResponse.json({ success: true });
   } catch (error) {

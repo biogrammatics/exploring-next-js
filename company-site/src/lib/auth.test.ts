@@ -19,9 +19,16 @@ vi.mock("@auth/prisma-adapter", () => ({
     getSessionAndUser: baseGetSessionAndUser,
   })),
 }));
-vi.mock("@/lib/db", () => ({ prisma: {} }));
+const { prismaMock } = vi.hoisted(() => ({
+  prismaMock: {
+    session: { deleteMany: vi.fn(), create: vi.fn() },
+    authorizedEmail: { findFirst: vi.fn() },
+  },
+}));
+vi.mock("@/lib/db", () => ({ prisma: prismaMock }));
 
 import { adapter, sessionCallback } from "./auth";
+import { SESSION_AUTH_VERSION } from "./session-version";
 
 const ownerUser = {
   id: "owner_1",
@@ -42,29 +49,75 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+const v = SESSION_AUTH_VERSION;
+
 describe("adapter.getSessionAndUser", () => {
-  it("copies Session.isTeamLogin onto the user so the session callback sees it", async () => {
+  it("copies Session.isTeamLogin onto the user when the team membership is still ACTIVE", async () => {
     baseGetSessionAndUser.mockResolvedValue({
-      session: { sessionToken: "t", userId: "owner_1", expires: new Date(), isTeamLogin: true },
+      session: { sessionToken: "t", userId: "owner_1", expires: new Date(), isTeamLogin: true, teamEmail: "c@x", authVersion: v },
       user: ownerUser,
     });
+    prismaMock.authorizedEmail.findFirst.mockResolvedValue({ id: "ae_1" });
     const result = await adapter.getSessionAndUser!("t");
     expect(baseGetSessionAndUser).toHaveBeenCalledWith("t");
+    expect(prismaMock.authorizedEmail.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { email: "c@x", userId: "owner_1", status: "ACTIVE" } })
+    );
     expect(result?.user).toMatchObject({ id: "owner_1", isTeamLogin: true });
   });
 
-  it("defaults isTeamLogin to false for a normal session row", async () => {
+  it("invalidates a team session whose membership has been revoked", async () => {
     baseGetSessionAndUser.mockResolvedValue({
-      session: { sessionToken: "t", userId: "owner_1", expires: new Date() },
+      session: { sessionToken: "t", userId: "owner_1", expires: new Date(), isTeamLogin: true, teamEmail: "c@x", authVersion: v },
+      user: ownerUser,
+    });
+    prismaMock.authorizedEmail.findFirst.mockResolvedValue(null);
+    expect(await adapter.getSessionAndUser!("t")).toBeNull();
+    expect(prismaMock.session.deleteMany).toHaveBeenCalledWith({ where: { sessionToken: "t" } });
+  });
+
+  it("returns a normal owner session with isTeamLogin false and no membership query", async () => {
+    baseGetSessionAndUser.mockResolvedValue({
+      session: { sessionToken: "t", userId: "owner_1", expires: new Date(), authVersion: v },
       user: ownerUser,
     });
     const result = await adapter.getSessionAndUser!("t");
     expect(result?.user).toMatchObject({ isTeamLogin: false });
+    expect(prismaMock.authorizedEmail.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("invalidates a session minted before versioning (authVersion null) instead of trusting it as the owner", async () => {
+    baseGetSessionAndUser.mockResolvedValue({
+      session: { sessionToken: "old", userId: "owner_1", expires: new Date(), isTeamLogin: false, authVersion: null },
+      user: ownerUser,
+    });
+    expect(await adapter.getSessionAndUser!("old")).toBeNull();
+    expect(prismaMock.session.deleteMany).toHaveBeenCalledWith({ where: { sessionToken: "old" } });
+  });
+
+  it("invalidates a session from a different version", async () => {
+    baseGetSessionAndUser.mockResolvedValue({
+      session: { sessionToken: "t", userId: "owner_1", expires: new Date(), authVersion: v + 1 },
+      user: ownerUser,
+    });
+    expect(await adapter.getSessionAndUser!("t")).toBeNull();
   });
 
   it("passes through a missing session as null", async () => {
     baseGetSessionAndUser.mockResolvedValue(null);
     expect(await adapter.getSessionAndUser!("nope")).toBeNull();
+  });
+});
+
+describe("adapter.createSession", () => {
+  it("stamps the current auth version on sessions minted by NextAuth", async () => {
+    prismaMock.session.create.mockImplementation(async (args: { data: unknown }) => args.data);
+    const expires = new Date();
+    const row = await adapter.createSession!({ sessionToken: "n", userId: "u", expires });
+    expect(prismaMock.session.create).toHaveBeenCalledWith({
+      data: { sessionToken: "n", userId: "u", expires, authVersion: v },
+    });
+    expect(row).toMatchObject({ authVersion: v });
   });
 });
 

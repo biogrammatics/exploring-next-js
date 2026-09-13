@@ -5,6 +5,8 @@ const { sendMock } = vi.hoisted(() => ({ sendMock: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/lib/db", () => ({
   prisma: {
+    $transaction: vi.fn(async (ops: unknown[]) => Promise.all(ops)),
+    session: { deleteMany: vi.fn() },
     user: { findUnique: vi.fn() },
     authorizedEmail: {
       findUnique: vi.fn(),
@@ -198,6 +200,7 @@ describe("DELETE /api/account/team", () => {
     vi.mocked(prisma.authorizedEmail.findFirst).mockResolvedValue({
       id: "ae_1",
       userId: "owner_1",
+      email: "colleague@example.com",
     } as never);
     const res = await DELETE(deleteRequest("ae_1"));
     expect(res.status).toBe(200);
@@ -207,5 +210,22 @@ describe("DELETE /api/account/team", () => {
         data: expect.objectContaining({ status: "REVOKED" }),
       })
     );
+  });
+
+  it("ends the colleague's live sessions when their access is revoked", async () => {
+    vi.mocked(auth).mockResolvedValue(ownerSession as never);
+    vi.mocked(prisma.authorizedEmail.findFirst).mockResolvedValue({
+      id: "ae_1",
+      userId: "owner_1",
+      email: "colleague@example.com",
+    } as never);
+    await DELETE(deleteRequest("ae_1"));
+    expect(prisma.session.deleteMany).toHaveBeenCalledWith({
+      where: {
+        userId: "owner_1",
+        isTeamLogin: true,
+        teamEmail: "colleague@example.com",
+      },
+    });
   });
 });

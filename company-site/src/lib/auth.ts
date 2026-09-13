@@ -5,6 +5,7 @@ import type { Adapter } from "next-auth/adapters";
 import { prisma } from "@/lib/db";
 import { authConfig } from "./auth.config";
 import type { Role } from "@/generated/prisma/client";
+import { SESSION_AUTH_VERSION } from "./session-version";
 
 declare module "next-auth" {
   interface Session {
@@ -26,20 +27,70 @@ declare module "next-auth" {
 
 const baseAdapter = PrismaAdapter(prisma) as Adapter;
 
+type SessionRowExtras = {
+  isTeamLogin?: boolean;
+  teamEmail?: string | null;
+  authVersion?: number | null;
+};
+
+async function invalidateSession(sessionToken: string) {
+  try {
+    await prisma.session.deleteMany({ where: { sessionToken } });
+  } catch (err) {
+    console.error("Failed to delete invalid session:", err);
+  }
+}
+
 /**
- * Auth.js's `session` callback only sees the adapter's `user` object, not the
- * Session row, so the team-login flag stored on `Session.isTeamLogin` would be
- * lost. Wrap `getSessionAndUser` to copy it onto the user before the callback
- * runs.
+ * Adapter wrapper. Three jobs on every session lookup:
+ *
+ * 1. Refuse rows minted under an older SESSION_AUTH_VERSION (or none). Those
+ *    rows cannot say whether they belong to the owner or a colleague, so they
+ *    are deleted rather than trusted with the owner's role.
+ * 2. For team logins, re-check that the AuthorizedEmail is still ACTIVE, so
+ *    revoking a colleague takes effect on their next request instead of when
+ *    their 30-day session expires.
+ * 3. Copy isTeamLogin onto the user object, because Auth.js's `session`
+ *    callback never sees Session columns.
+ *
+ * createSession is wrapped so sessions minted by NextAuth's own provider flow
+ * carry the version stamp too.
  */
 export const adapter: Adapter = {
   ...baseAdapter,
+  async createSession(data) {
+    return prisma.session.create({
+      data: { ...data, authVersion: SESSION_AUTH_VERSION },
+    });
+  },
   async getSessionAndUser(sessionToken) {
     const result = await baseAdapter.getSessionAndUser!(sessionToken);
     if (!result) return null;
-    const isTeamLogin = Boolean(
-      (result.session as { isTeamLogin?: boolean }).isTeamLogin
-    );
+    const row = result.session as typeof result.session & SessionRowExtras;
+
+    if (row.authVersion !== SESSION_AUTH_VERSION) {
+      await invalidateSession(sessionToken);
+      return null;
+    }
+
+    const isTeamLogin = Boolean(row.isTeamLogin);
+    if (isTeamLogin) {
+      const active = row.teamEmail
+        ? await prisma.authorizedEmail.findFirst({
+            where: {
+              email: row.teamEmail,
+              userId: result.user.id,
+              status: "ACTIVE",
+            },
+            select: { id: true },
+          })
+        : null;
+      if (!active) {
+        await invalidateSession(sessionToken);
+        return null;
+      }
+    }
+
     return { ...result, user: { ...result.user, isTeamLogin } };
   },
 };

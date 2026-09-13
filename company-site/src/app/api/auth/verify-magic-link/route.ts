@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { normalizeEmail } from "@/lib/identity";
+import { SESSION_AUTH_VERSION } from "@/lib/session-version";
 import { cookies } from "next/headers";
 import crypto from "crypto";
 
@@ -117,6 +118,7 @@ export async function GET(request: NextRequest) {
         expires,
         isTeamLogin,
         teamEmail: isTeamLogin ? normalizedEmail : null,
+        authVersion: SESSION_AUTH_VERSION,
       },
     });
 
