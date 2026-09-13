@@ -46,6 +46,8 @@ Commits referenced:
 
 ### 4. Replace destructive production schema synchronization with migrations — **Partial** (C4)
 - `9420262`: `npm run build` is now `prisma generate && next build` (a local build can no longer mutate whatever `DATABASE_URL` points at). `render.yaml` runs `prisma db push` **without** `--accept-data-loss`, so a schema change that would drop data fails the deploy and leaves the previous release running.
+- `ff40ea7`, `814442a`: the schema sync moved out of the Render build command entirely into a `preDeployCommand` — build containers cannot reach the database's internal hostname, which the Blueprint supplies via `fromDatabase.connectionString`. Schema migration and application compilation are now separate deployment steps, as recommended.
+- Also in this pass (`ccd5289`, `793e4da`, `814442a`): the first Blueprint sync since February exposed drift between `render.yaml` and the dashboard — retired `starter` plan name, database upgraded to Basic-256mb, web service upgraded to the $7 instance. The file now declares the actual plans; a sync had briefly downgraded the web service to free before this was corrected.
 - Not done: taking a verified backup, baselining the current production schema into a migration, and switching to `prisma migrate deploy`. These require production database access and a maintenance window. Steps are listed in `AUDIT.md` Phase A.
 
 ### 5. Bound and protect codon-optimization workloads — **Partial** (C5, M21, M22)

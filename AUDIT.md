@@ -28,6 +28,10 @@ Two remediation rounds have landed since June. In July (`e9c1543`, `877515b`, `8
 
 There is still no `src/proxy.ts` (Next 16's name for `middleware.ts`), and the `authorized` callback in `auth.config.ts` remains dead code. The remediation chose a different mechanism: `src/lib/auth-guards.ts` is the single definition of "who is an admin", and grep confirms it is called by all 12 admin Server Actions, all 19 admin page/layout files, and every admin and Twist API handler. This is robust as long as new routes follow the convention (see `CLAUDE.md`). A `proxy.ts` matcher on `/admin` and `/api/admin` would add defense in depth at low cost and is still recommended.
 
+### Deploy configuration note (2026-09-12)
+
+Editing `render.yaml` for C4 triggered the first Blueprint sync since February and exposed that the file and the dashboard had diverged: the worker used the retired `starter` plan name, the database had been upgraded to Basic-256mb, the web service had been upgraded to the $7 instance, and `DATABASE_URL` had been pointed at the external hostname so the build could run `db push`. The sync failed on the database downgrade, then briefly downgraded the web service to free, then restored the Blueprint-supplied internal `DATABASE_URL`, which the build container cannot reach. All of this is now reconciled (`ccd5289`, `793e4da`, `ff40ea7`, `814442a`): plans are declared as they actually are, and the schema sync runs as a `preDeployCommand` inside the private network. **Rule going forward:** change plans and env vars in `render.yaml`, not in the dashboard; a sync overwrites the dashboard.
+
 ### Severity legend
 
 | Tier | Meaning |
@@ -158,7 +162,7 @@ Dead navigation links (Codex 11), inert strain add-to-cart (12), legal pages wit
 ## Remediation roadmap
 
 **Phase A — Finish production safety (blockers)**
-- [ ] C4 — `pg_dump`; `prisma migrate diff --from-url $PROD --to-schema-datamodel prisma/schema.prisma --script` → baseline migration; `prisma migrate resolve --applied`; `render.yaml` → `prisma migrate deploy && npm run build`
+- [ ] C4 — `pg_dump`; `prisma migrate diff --from-url $PROD --to-schema-datamodel prisma/schema.prisma --script` → baseline migration; `prisma migrate resolve --applied`; `render.yaml` `preDeployCommand` → `npx prisma migrate deploy`
 - [ ] H37 — rate limiting + uniform `check-email`
 - [ ] H39 — declare all env vars in `render.yaml`; add fail-fast `lib/env.ts` (closes L27)
 - [ ] H38 — optimizer in a `worker_threads` Worker with a deadline

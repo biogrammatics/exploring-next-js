@@ -173,12 +173,22 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 
 ## Deployment
 
-Deployed on Render via `render.yaml`:
-- **Web service:** Next.js app (free tier)
-- **Background worker:** Codon optimization worker (starter tier, $7/mo)
-- **Database:** PostgreSQL (free tier)
+Deployed on Render from `main` via the Blueprint in `../render.yaml`:
+- **Web service:** Next.js app (`0.5c-512mb`, $7/mo)
+- **Background worker:** Codon optimization worker (`0.5c-512mb`, $7/mo)
+- **Database:** PostgreSQL (Basic-256mb, declared as `0.1c-256mb`)
 
-Build command: `npm install && npx prisma generate && npx prisma db push --accept-data-loss && npm run build`
+Build: `npm install && npm run build` (no database access — Render build
+containers cannot reach the database's internal hostname).
+Pre-deploy: `npx prisma db push` (runs inside the private network, after the
+build and before the new instance starts; without `--accept-data-loss`, a
+change that would drop data fails the deploy and the previous release keeps
+serving). Start: `npm start`.
+
+The Blueprint is the source of truth: a sync re-applies every plan and env var
+in `render.yaml` over dashboard changes, so upgrade plans in the file, not only
+in the dashboard. Migrations in `prisma/migrations/` are stale; see
+`../AUDIT.md` C4 for the plan to baseline them and move to `prisma migrate deploy`.
 
 ## To-Do
 

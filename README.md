@@ -169,15 +169,19 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 
 ```bash
 npx prisma generate    # Generate Prisma client
-npx prisma db push     # Push schema changes
+npx prisma db push     # Push schema changes (local database only — check DATABASE_URL first)
 npx prisma studio      # Open Prisma Studio GUI
 ```
 
 ## Deployment
 
-Deployed on Render with:
-- **Web Service**: Next.js application
-- **Background Worker**: Codon optimization job processor
+Deployed on Render from `main` via the Blueprint in `render.yaml`:
+- **Web Service**: Next.js application (`0.5c-512mb`); `prisma db push` runs as a pre-deploy step
+- **Background Worker**: Codon optimization job processor (`0.5c-512mb`)
+- **Database**: PostgreSQL (Basic-256mb)
+
+`render.yaml` is the source of truth for plans and environment variables; a Blueprint
+sync overwrites dashboard changes. See `AUDIT.md` (C4, H39) for the open deploy items.
 - **PostgreSQL**: Managed database
 
 See `render.yaml` for configuration.
