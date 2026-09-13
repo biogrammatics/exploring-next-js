@@ -39,16 +39,17 @@ Commits referenced:
 - `4ffb044`: admin order list, detail and both admin order APIs now read all three relations via `src/lib/order-lines.ts` (they previously showed vector/strain orders as "0 items").
 - Remaining: `shippedLotId` is still never assigned at checkout or fulfilment (TODO.md item).
 
-### 3. Make Stripe webhook processing payment-aware and idempotent — **Done** (C3, H13, M18)
+### 3. Make Stripe webhook processing payment-aware and idempotent — **Partial** (C3, H13, M18; reopened per Astra A3 → AUDIT H50)
 - `877515b`: requires `payment_status === "paid"`; records `event.id` in `ProcessedWebhookEvent` inside the same transaction as the order update (replay hits P2002 and is acknowledged); conditional `updateMany` transitions; user association via `upsert`; handlers for `async_payment_failed`, `session.expired`, `charge.refunded`, `charge.dispute.created`; `OrderStatus` gained `PROCESSING`, `PAYMENT_FAILED`, `REFUNDED`, `DISPUTED`.
 - `78b289e`: customer email is normalized before the upsert so the webhook and the magic-link path agree on identity (previously a mixed-case checkout email created a second, un-loginable User).
 - Tests: `src/app/api/webhooks/stripe/route.test.ts`.
+- 2026-09-13: duplicate detection narrowed to the event-ledger insert (`meta.modelName === "ProcessedWebhookEvent"`); any other P2002 stays a retryable 500. **Still open:** refund/dispute events that arrive before the paid-session event match no order and are never retried; payment identity, amount and currency are not verified against the order. See AUDIT H50.
 
 ### 4. Replace destructive production schema synchronization with migrations — **Partial** (C4)
 - `9420262`: `npm run build` is now `prisma generate && next build` (a local build can no longer mutate whatever `DATABASE_URL` points at). `render.yaml` runs `prisma db push` **without** `--accept-data-loss`, so a schema change that would drop data fails the deploy and leaves the previous release running.
 - `ff40ea7`, `814442a`: the schema sync moved out of the Render build command entirely into a `preDeployCommand` — build containers cannot reach the database's internal hostname, which the Blueprint supplies via `fromDatabase.connectionString`. Schema migration and application compilation are now separate deployment steps, as recommended.
 - Also in this pass (`ccd5289`, `793e4da`, `814442a`): the first Blueprint sync since February exposed drift between `render.yaml` and the dashboard — retired `starter` plan name, database upgraded to Basic-256mb, web service upgraded to the $7 instance. The file now declares the actual plans; a sync had briefly downgraded the web service to free before this was corrected.
-- Not done: taking a verified backup, baselining the current production schema into a migration, and switching to `prisma migrate deploy`. These require production database access and a maintenance window. Steps are listed in `AUDIT.md` Phase A.
+- Not done: taking a verified backup, baselining the current production schema into a migration, and switching to `prisma migrate deploy`. These require production database access and a maintenance window. The corrected procedure (baseline from empty → verified production schema, not production → desired schema) is in `AUDIT.md` Phase A, per Astra A6.
 
 ### 5. Bound and protect codon-optimization workloads — **Partial** (C5, M21, M22)
 - `273d351`:
@@ -59,7 +60,8 @@ Commits referenced:
   - Worker claims jobs atomically (`updateMany` guarded on `PENDING`, proceeds only if `count === 1`), requeues `PROCESSING` rows older than 30 minutes at startup and every 60 polls, and finishes the in-flight job on SIGTERM.
   - A terminal `*` is stripped consistently by API and worker (previously every FASTA-style paste failed).
 - Tests: `src/lib/codon-optimization.test.ts`, `src/app/api/codon-optimization/route.test.ts`.
-- Not done: authentication requirement for full jobs (guest submission was kept as a product decision, now gated on a valid email); per-user/per-IP rate limits and concurrency quotas (AUDIT H37); a per-job wall-clock deadline — the optimizer is synchronous, so this needs a `worker_threads` Worker (AUDIT H38); recording algorithm version, input hash and seed for reproducibility.
+- 2026-09-13: per-IP submission limit (10/hour, in-memory, single-instance) via `src/lib/rate-limit.ts`.
+- Not done: authentication requirement for full jobs (guest submission was kept as a product decision, now gated on a valid email); shared-store rate limits and concurrency quotas (AUDIT H37); claim tokens so a stale worker cannot overwrite a newer attempt (AUDIT M54); IUPAC motif semantics — accepted codes are not expanded by the optimizers (AUDIT H49, Astra A5); a per-job wall-clock deadline — the optimizer is synchronous, so this needs a `worker_threads` Worker (AUDIT H38); recording algorithm version, input hash and seed for reproducibility.
 
 ## P1: Security, authorization, and correctness
 
@@ -73,6 +75,7 @@ Commits referenced:
 - `78b289e`: a team login is flagged on the `Session` row (`isTeamLogin`, `teamEmail`); the Prisma adapter is wrapped so the session callback sees the flag and forces `role = USER`; `change-email`, team invite/revoke, admin guards and admin product previews reject team sessions; magic-link verification resolves a primary `User` before an `AuthorizedEmail` (so an address that is both never lands in someone else's account); `verify-email-change` and `accept-invite` refuse addresses already in use as the other kind.
 - Also fixed: re-inviting a revoked team email 500'd on the unique constraint (M34).
 - Tests: `src/lib/auth.test.ts`, `src/app/api/account/team/route.test.ts`.
+- 2026-09-13 (Astra A2 → AUDIT H48): revocation now deletes the colleague's sessions; the adapter re-checks ACTIVE membership on every team-session lookup; `Session.authVersion` invalidates all pre-versioning sessions on next use, closing the rollout gap where old unflagged sessions kept the owner's role.
 - Not done: the full redesign — distinct `User` per human with organization membership modelled separately, per-actor audit trail, shorter magic-link lifetime. Team members still act *as* the owner's data scope, just with USER privileges and no identity controls.
 
 ### 8. Enforce publication status on direct product routes and files — **Done** (H7, H8, M36)
@@ -83,8 +86,9 @@ Commits referenced:
 ### 9. Validate all checkout and administrative state changes — **Done** (H12, H14)
 - `e9c1543`: positive integer quantities ≤ 1000; server-computed subtotal asserted.
 - `4ffb044`: order-status PATCH parses JSON defensively, validates against `z.enum(ORDER_STATUSES)`, 404s missing orders, and enforces `ADMIN_ORDER_TRANSITIONS` (admins move orders through fulfilment or cancel; payment-derived states are webhook-only). The status form offers only allowed transitions, checks `response.ok`, shows the server error and reverts. Checkout validates and normalizes the customer email.
-- Tests: `src/app/api/admin/orders/[id]/route.test.ts` (18 cases).
-- Not done: full Zod schemas for the shipping address, phone and country; tax (M17).
+- Tests: `src/app/api/admin/orders/[id]/route.test.ts` (20 cases).
+- 2026-09-13 (Astra A4 → AUDIT H51): the status update is now conditional on the validated current status (409 on a stale write) and the manual DISPUTED → REFUNDED path is removed, so payment-derived states are genuinely webhook-only.
+- Not done: full Zod schemas for the shipping address, phone and country; tax (M17); separating payment status from fulfilment status.
 
 ### 10. Add upload limits and content validation — **Not started** (H15)
 - No size limit, magic-byte check, streaming, presigned-upload flow, filename sanitisation (L26) or thumbnail relocation has been implemented. Admin-only surface, so lower urgency than the items above.
@@ -122,6 +126,7 @@ Commits referenced:
 
 ### 19. Make a clean checkout reproducible — **Partial**
 - `9420262`: application build no longer depends on or mutates a database.
+- 2026-09-13 (Astra A1 → AUDIT C47): Next 16.1.6 → 16.3.5 (July + August 2026 security releases), `eslint-config-next` aligned, Node 20 → 24 on both Render services with `engines.node >=24`; `next build` verified locally on the new versions.
 - Verified locally on 2026-09-12: `npx tsc --noEmit` clean, `npx vitest run` green, `npx eslint .` down from 7 errors to 3 (all pre-existing, in untouched files).
 - Not done: `.github/workflows` CI (install, generate, lint, typecheck, test, build); pinned package-manager version; `.env.example` still missing `AWS_*` and `SHIPSTATION_API_KEY` (L28).
 

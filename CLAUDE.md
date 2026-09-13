@@ -34,6 +34,13 @@ be used until baselined (AUDIT.md C4). Plans in `render.yaml` must match the
 dashboard: a Blueprint sync applies them, and a lower value downgrades the
 live resource.
 
+## Start-of-session checks
+
+- `npm view next dist-tags` vs the lockfile, and Node LTS status vs
+  `render.yaml` `NODE_VERSION` (currently 24). Framework security releases
+  are preannounced monthly; lagging them was the top finding of the
+  September 2026 external review.
+
 ## Conventions that must be followed
 
 These modules exist because copied logic drifted into real bugs. Use them;
@@ -49,7 +56,16 @@ do not re-implement.
 - **Team logins.** `session.user.isTeamLogin` is true when a colleague signed
   in via an owner's `AuthorizedEmail`. Such sessions are forced to role USER
   and must be rejected by anything that changes account identity (email,
-  team membership, roles). The guards already do this.
+  team membership, roles). The guards already do this. The adapter re-checks
+  membership on every lookup; revoking a team email deletes its sessions.
+- **Session versioning — `src/lib/session-version.ts`.** Every Session row
+  is stamped with `SESSION_AUTH_VERSION`; the adapter deletes rows with any
+  other value. Bump the constant when the meaning of a session changes and
+  every user will re-authenticate once. Mint sessions only through the
+  adapter or with the stamp.
+- **Rate limiting — `src/lib/rate-limit.ts`.** Any endpoint that sends mail,
+  reveals account existence, or enqueues CPU work calls `rateLimitResponse`
+  first. The store is in-memory (single instance); swap it before scaling.
 - **Email identity — `src/lib/identity.ts`.** Call `normalizeEmail()` before
   any create/find/compare on `User.email`, `Order.customerEmail`,
   `AuthorizedEmail.email`. Validate input with `isValidEmail()`.
@@ -66,7 +82,13 @@ do not re-implement.
 - **Codon intake — `src/lib/codon-optimization.ts`.** `validateProteinSequence`
   (10,000 aa hard cap, strips one trailing `*`) and `validateExclusionPattern`
   (IUPAC + `[...]` + `{n}` only; no commas, no regex metacharacters) are the
-  only accepted validators for job submission.
+  only accepted validators for job submission. Known gap (AUDIT H49): the
+  optimizers do not expand IUPAC codes, so `GCN` currently matches nothing;
+  do not advertise IUPAC support until the shared motif parser exists.
+- **Order status writes** go through a conditional update on the expected
+  current status (`updateMany({ where: { id, status: current } })`) and only
+  targets listed in `ADMIN_ORDER_TRANSITIONS`; payment-derived states are
+  written by the Stripe webhook alone.
 
 ## Next.js 16 specifics
 
@@ -106,7 +128,11 @@ company-site/
 
 `AUDIT.md` is the authoritative list of open issues with stable IDs; cite
 them in commit messages (e.g. "closes H37"). `CODEX_ACTIONS.md` maps the
-July 2026 external review's recommendations to what has been done.
+July 2026 external review's recommendations to what has been done;
+`CODEX_ASTRA.md` is the September 2026 independent review whose findings
+are folded into AUDIT.md as C47–M56. Its lesson: do not mark an item fixed
+after repairing the local code path — prove the lifecycle (event ordering,
+session revocation, worker fencing, motif semantics) with a probe.
 Debug pages (`/admin/twist-test`, `/admin/twilio-test`, `api/twist/*`) are
 development tooling that currently ships to production (AUDIT.md M42).
 `SECURITY_README.md` describes an encryption design that is not implemented

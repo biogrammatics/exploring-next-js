@@ -1,7 +1,7 @@
 # BioGrammatics Company Site — Code Audit
 
 **Target:** `company-site/` (the codebase behind https://beta.biogrammatics.com)
-**Date:** 2026-09-12 (supersedes the 2026-06-02 audit, preserved in git at `b17b01c`)
+**Date:** 2026-09-12, amended 2026-09-13 after the independent Codex Astra review (`CODEX_ASTRA.md`) (supersedes the 2026-06-02 audit, preserved in git at `b17b01c`)
 **Stack:** Next.js 16 (App Router) · React 19 · TypeScript (strict) · Prisma 7 / PostgreSQL · NextAuth v5 · Stripe · AWS S3 · Twist / Twilio / ShipStation · background codon-optimization worker (~28k LOC incl. scripts)
 
 **Method:** Whole-codebase review, not a diff review. Eight independent finder passes (three line-by-line correctness sweeps split by subsystem — auth/admin, commerce, codon pipeline — plus an authorization-invariant audit, a cross-file producer/consumer trace, and reuse, efficiency and root-cause passes). Every candidate that survived deduplication was independently re-verified against the source before being reported; 13 of 14 verified as confirmed, one as plausible, none refuted. The ten highest-severity findings were then fixed the same day in six themed commits (`e76d61d..9420262`) and this document records the resulting state.
@@ -16,8 +16,9 @@ Findings keep the stable-ID convention from the June audit (`C#` critical, `H#` 
 
 Two remediation rounds have landed since June. In July (`e9c1543`, `877515b`, `8fe8fe2`, `2c06c05`, `cbb80a6`) the payment-integrity criticals were closed: all product types are persisted on the order, shipping is recomputed server-side, the Stripe webhook is payment-aware and idempotent, and a test harness was introduced. On 2026-09-12 this review closed the access-control cluster and a second layer of correctness bugs: admin Server Actions are guarded, team logins no longer inherit the owner's role, product visibility is enforced by one predicate, shipping can no longer be omitted, the codon endpoint is bounded and its worker claims jobs atomically, and admin order views show what was actually bought.
 
-**The site is now defensible against the attacks the June audit described, but it is not yet launch-ready.** Five items still block a public launch with real payments:
+**The site is now defensible against the attacks the June audit described, but it is not yet launch-ready.** Six items still block a public launch with real payments. The first was added by the Codex Astra review and was an omission in the original version of this document:
 
+0. **C47 — framework and runtime currency.** Resolved 2026-09-13: Next.js moved from 16.1.6 to 16.3.5 (July release: Server Action CPU DoS CVE-2026-64641 and Server Function endpoint disclosure CVE-2026-64643; August release: AVIF image-optimizer RCE GHSA-2xp9-vwfh-vxw4), and both Render services moved from end-of-life Node 20 to Node 24. Keep this current; see the Astra section for the recurring rule.
 1. **C4 — migrations.** Production schema is still synced by `prisma db push`, now from the web service's pre-deploy command (Render build containers cannot reach the database's internal hostname). `--accept-data-loss` is gone, so a destructive change fails the new instance and the previous release keeps serving, but the migrations directory is frozen at January and `prisma migrate deploy` has not been adopted. Needs production database access to baseline.
 2. **H9 / H37 — no rate limiting** on magic-link, check-email, team invite, change-email or codon submission. Input is now validated and bounded, but unlimited outbound mail and user enumeration remain.
 3. **H10 / H39 — environment provisioning.** `render.yaml` still does not declare `NEXT_PUBLIC_BASE_URL` (checkout `success_url` becomes `undefined/...`), `AWS_*`, `SHIPSTATION_API_KEY`, or the `TWIST_*` tokens the worker needs. If these are set by hand in the Render dashboard the site works; the file does not reproduce that.
@@ -124,7 +125,7 @@ It names `src/lib/encryption.ts`, `POST /api/account/enable-encryption`, `isEncr
 - `admin/orders`, `admin/users`, `admin/vectors`, `admin/strains` lists and their APIs are unpaginated `findMany` with full relation trees.
 - `admin/page.tsx` runs four independent aggregates serially after an existing `Promise.all`.
 - Checkout looks up each cart line in a separate sequential round trip.
-- `dp-optimizer.ts` `maxPatternLength` defaults to 100 while the longest real pattern is 26; measured 40% faster with byte-identical output at 30.
+- ~~`dp-optimizer.ts` `maxPatternLength` defaults to 100 while the longest real pattern is 26; measured 40% faster at 30.~~ **Withdrawn (Astra A5):** the window must be derived from the parsed motifs, not shrunk; user motifs can already exceed 100 bases (H49).
 - No catalog page sets `revalidate`; every visit hits Postgres.
 
 #### 🟡 M44 — Orphaned PENDING orders and cart cleared too early (supersedes M16)
@@ -145,6 +146,28 @@ Dead navigation links (Codex 11), inert strain add-to-cart (12), legal pages wit
 
 ---
 
+## Codex Astra review (2026-09-13) — findings and status
+
+An independent review of `b18f89a` (`CODEX_ASTRA.md`) ran six adversarial probes against the real route and optimizer code; all six exposed defects this audit had marked fixed or had not considered. Its findings are adopted here with stable IDs. Status reflects the first remediation gate, landed 2026-09-13.
+
+| ID | Astra | Finding | Status |
+|----|-------|---------|--------|
+| 🔴 **C47** | A1 | Lockfile pinned Next 16.1.6 despite the July and August 2026 security releases (Server Action DoS, endpoint-ID disclosure, AVIF RCE); both Render services on end-of-life Node 20. | ✅ Fixed — Next 16.3.5, `eslint-config-next` aligned, `@types/node` 24, `engines.node >=24`, Render `NODE_VERSION` 24, clean `next build`. **Recurring rule:** check `npm view next dist-tags` and Node LTS status at the start of every work session. |
+| 🟠 **H48** | A2 | Revoking a team email left the colleague's 30-day session alive; sessions minted before the team flag existed defaulted to "owner" and kept the owner's role. | ✅ Fixed — revocation deletes matching sessions in the same transaction; the adapter re-checks ACTIVE membership on every team-session lookup; `Session.authVersion` (see `src/lib/session-version.ts`) invalidates every pre-versioning session on next use instead of guessing its actor. Everyone signed in before this deploy will be asked to sign in again once. |
+| 🟠 **H49** | A5 | Exclusion motifs are accepted as IUPAC but compiled as literal regex: `GCN` never matches; `[ACGT]{101}` exceeds the 100-base scan window. Optimizer reports success on sequences that violate the requested exclusion. | ❌ Open — needs one shared motif parser (intake + both optimizers) that expands IUPAC, bounds expanded length, derives the scan window from the parsed motifs, and independently validates the final DNA against every exclusion before reporting success. Until then, treat IUPAC codes other than ACGT in user patterns as unsupported. |
+| 🟠 **H50** | A3 | Webhook: a refund or dispute arriving before `checkout.session.completed` matches no order (payment-intent id not yet recorded) yet is written to the ledger, so it can never be retried; and any P2002 was acknowledged as a replay. | 🟡 Partial — the P2002 classification now requires `meta.modelName === "ProcessedWebhookEvent"`; other uniqueness failures return 500 and stay retryable (tested). **Ordering convergence still open:** persist unmatched payment events for reconciliation, resolve orders by session and payment-intent, verify amount/currency, and test paid/refund/dispute permutations against a real database. |
+| 🟠 **H51** | A4 | Admin order PATCH validated against a read then updated by id alone (stale write overwrites a refund); transition table allowed DISPUTED → REFUNDED by hand. | ✅ Fixed — conditional `updateMany` on the expected current status, 409 on mismatch; manual REFUNDED target removed. Longer term: separate payment status from fulfilment status. |
+| 🟠 **H52** | A7 | `PENDING_QUOTE` is a label, not a fulfilment hold; an admin can ship an order whose shipping was never collected, and "no rates" may mean an unsupported destination. | ❌ Open — product decision. Recommended: refuse paid checkout when shipping cannot be priced and offer a quote/contact path; if pay-first is required, add a server-enforced release condition before SHIPPED. |
+| 🟡 **M53** | A6 | The C4 baseline recipe in this document was wrong (diffed production against the desired schema; "safe-by-failure" overstated). | ✅ Fixed in the roadmap text above. |
+| 🟡 **M54** | A8 | Stale-job sweep can requeue a still-running job; no claim token, so a stale worker can overwrite a newer attempt's result. Body-size check runs after JSON parsing; guest email proves format, not ownership. | 🟡 Partial — interim per-IP limits on job submission (H37 below). Claim token / attempt id, heartbeat, retry bound and an interruptible deadline (H38) still open. M22 is downgraded to Partial accordingly. |
+| 🟠 **H37** | A1, A8 | No rate limiting (from June H9). | 🟡 Partial — `src/lib/rate-limit.ts`, an in-memory fixed-window limiter, now guards send-magic-link (per IP and per target address), check-email, change-email, team invite and codon submission. Adequate for one instance; replace the store with Upstash/Arcjet before scaling out. `check-email` still returns distinguishable shapes. |
+| 🟡 **M55** | Arch. | Checkout success page does not verify `session_id`; deleting a pending order on Stripe failure would lose the reference if Stripe succeeded but the response was lost. | ❌ Open — replaces M44's "delete on failure" advice: keep the order as a durable attempt, send a stable idempotency key, reconcile uncertain outcomes, clear only confirmed items from the cart. |
+| 🟡 **M56** | Arch. | Worker randomly resolves B/Z/J/X residues and substitutes U/O; `targetOrganism` is accepted but never selects anything. | ❌ Open — reject or require explicit resolution before a synthesis-facing result; store original, resolved sequence, substitutions, algorithm version and parameters; reject unknown organisms. Raised from L25. |
+
+Astra also confirmed, and this audit adopts: keep authorization beside data access rather than adding a blanket proxy; keep the Next.js monolith plus worker; do not make every optional integration's secret mandatory in every service; treat `SECURITY_README.md` as an unimplemented proposal (M41).
+
+---
+
 ## What's genuinely solid (keep it this way)
 
 - **Server-authoritative pricing and shipping.** Product prices come from the DB; shipping is quoted by the server for the submitted address and can no longer be omitted; persisted totals are asserted against Stripe line items.
@@ -162,11 +185,11 @@ Dead navigation links (Codex 11), inert strain add-to-cart (12), legal pages wit
 ## Remediation roadmap
 
 **Phase A — Finish production safety (blockers)**
-- [ ] C4 — `pg_dump`; `prisma migrate diff --from-url $PROD --to-schema-datamodel prisma/schema.prisma --script` → baseline migration; `prisma migrate resolve --applied`; `render.yaml` `preDeployCommand` → `npx prisma migrate deploy`
+- [ ] C4 — (recipe corrected per Astra A6) `pg_dump` and prove a restore; inspect the live schema and `_prisma_migrations`; generate the **baseline** as a diff **from an empty database to the verified production schema** (`prisma migrate diff --from-empty --to-url $PROD --script` → `migrations/<ts>_baseline/migration.sql`), reconcile or discard the three January files, `prisma migrate resolve --applied <baseline>`; any remaining difference between production and `schema.prisma` becomes a separate, reviewed migration; prove empty-DB replay and upgrade of a restored copy; only then `preDeployCommand` → `npx prisma migrate deploy`. Use backward-compatible schema changes across overlapping releases — a failed deploy does not roll the schema back.
 - [ ] H37 — rate limiting + uniform `check-email`
 - [ ] H39 — declare all env vars in `render.yaml`; add fail-fast `lib/env.ts` (closes L27)
 - [ ] H38 — optimizer in a `worker_threads` Worker with a deadline
-- [ ] `src/proxy.ts` matcher on `/admin`, `/api/admin`, `/api/twist` (defense in depth)
+- [ ] ~~`src/proxy.ts` matcher on `/admin`, `/api/admin`, `/api/twist`~~ Demoted (Astra): authorization stays next to data access via the guard helpers; a blanket admin matcher would break the deliberately public file routes under `/api/admin/files`. Revisit only after those move to a public path.
 
 **Phase B — Correctness and robustness**
 - [ ] M44 — create the Stripe session first, or delete the order on failure; clear the cart on `/checkout/success`, not before redirect
