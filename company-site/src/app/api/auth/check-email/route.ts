@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { normalizeEmail } from "@/lib/identity";
+import { rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = rateLimitResponse(RATE_LIMITS.checkEmail, request.headers);
+    if (limited) return limited;
+
     const { email } = await request.json();
 
     if (!email || typeof email !== "string") {

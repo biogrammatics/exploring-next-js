@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { normalizeEmail } from "@/lib/identity";
+import { rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 import { Resend } from "resend";
 import crypto from "crypto";
 
@@ -18,6 +19,16 @@ export async function POST(request: NextRequest) {
         { error: "Email is required" },
         { status: 400 }
       );
+    }
+
+    // Per IP and per target address: bounds mail-bombing a third party.
+    const limited = rateLimitResponse(
+      RATE_LIMITS.sendMagicLink,
+      request.headers,
+      normalizeEmail(email)
+    );
+    if (limited) {
+      return limited;
     }
 
     const normalizedEmail = normalizeEmail(email);

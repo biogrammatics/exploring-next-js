@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
@@ -31,6 +32,9 @@ function sanitizeProteinName(value: unknown): string | null {
  */
 export async function POST(request: NextRequest) {
   try {
+    const limited = rateLimitResponse(RATE_LIMITS.codonSubmit, request.headers);
+    if (limited) return limited;
+
     const session = await auth();
     const body = await request.json();
 

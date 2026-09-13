@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { normalizeEmail } from "@/lib/identity";
+import { rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 import { Resend } from "resend";
 import crypto from "crypto";
 
@@ -12,6 +13,9 @@ const TOKEN_EXPIRY_SECONDS = 24 * 60 * 60;
 
 // POST - Request email change
 export async function POST(request: NextRequest) {
+  const limited = rateLimitResponse(RATE_LIMITS.changeEmail, request.headers);
+  if (limited) return limited;
+
   try {
     const guard = await requireUser();
     if (guard.response) return guard.response;
