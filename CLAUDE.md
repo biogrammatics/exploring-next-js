@@ -26,11 +26,13 @@ npx prisma generate  # after any schema.prisma change
 Never run `prisma db push`, `prisma migrate`, or `npm run build` against a
 database you have not confirmed is local. `.env` holds `DATABASE_URL`; check
 that it points at `localhost` before any command that could touch a schema.
-Production schema is applied by the web service's start command on Render
-(`prisma db push && npm start`, no `--accept-data-loss`); the build container
-cannot reach the database's internal hostname. Migrations in
-`prisma/migrations/` are stale and must not be used until baselined
-(AUDIT.md C4).
+Production schema is applied by the web service's Render pre-deploy command
+(`prisma db push`, no `--accept-data-loss`), which runs after build and before
+the new instance starts; the build container cannot reach the database's
+internal hostname. Migrations in `prisma/migrations/` are stale and must not
+be used until baselined (AUDIT.md C4). Plans in `render.yaml` must match the
+dashboard: a Blueprint sync applies them, and a lower value downgrades the
+live resource.
 
 ## Conventions that must be followed
 

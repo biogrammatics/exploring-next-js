@@ -10,15 +10,19 @@ services:
   - type: web
     name: biogrammatics-nextjs
     runtime: node
-    plan: free
+    # 0.5 CPU / 512 MB, $7/month (formerly "starter"). Must match the dashboard:
+    # a Blueprint sync applies this value, and "free" here downgraded the service
+    # once already. Paid plan also enables preDeployCommand.
+    plan: 0.5c-512mb
     rootDir: company-site
     buildCommand: npm install && npm run build
-    # Schema sync runs at service start, not build: the build container cannot
-    # reach the database's internal hostname (fromDatabase.connectionString), and
-    # preDeployCommand is paid-plan only. db push without --accept-data-loss: a
-    # change that would drop data fails the new instance and the previous release
-    # keeps serving. Long-term fix is `prisma migrate deploy` after baselining.
-    startCommand: npx prisma db push && npm start
+    # Schema sync runs as a pre-deploy step: after build, before the new instance
+    # starts, inside Render's private network (the build container cannot reach the
+    # database's internal hostname). Without --accept-data-loss, a change that would
+    # drop data fails the deploy and the previous release keeps serving.
+    # Long-term fix is `prisma migrate deploy` after baselining migrations.
+    preDeployCommand: npx prisma db push
+    startCommand: npm start
     healthCheckPath: /
     envVars:
       - key: NODE_VERSION
