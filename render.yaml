@@ -12,11 +12,13 @@ services:
     runtime: node
     plan: free
     rootDir: company-site
-    # db push without --accept-data-loss: a schema change that would drop data now
-    # fails the deploy (leaving the previous release running) instead of silently
-    # destroying columns. Long-term fix is `prisma migrate deploy` after baselining.
-    buildCommand: npm install && npx prisma db push && npm run build
-    startCommand: npm start
+    buildCommand: npm install && npm run build
+    # Schema sync runs at service start, not build: the build container cannot
+    # reach the database's internal hostname (fromDatabase.connectionString), and
+    # preDeployCommand is paid-plan only. db push without --accept-data-loss: a
+    # change that would drop data fails the new instance and the previous release
+    # keeps serving. Long-term fix is `prisma migrate deploy` after baselining.
+    startCommand: npx prisma db push && npm start
     healthCheckPath: /
     envVars:
       - key: NODE_VERSION

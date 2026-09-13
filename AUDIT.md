@@ -18,7 +18,7 @@ Two remediation rounds have landed since June. In July (`e9c1543`, `877515b`, `8
 
 **The site is now defensible against the attacks the June audit described, but it is not yet launch-ready.** Five items still block a public launch with real payments:
 
-1. **C4 — migrations.** Production schema is still synced by `prisma db push`. The build no longer touches the database and `--accept-data-loss` is gone, so a destructive change now fails the deploy instead of dropping data, but the migrations directory is frozen at January and `prisma migrate deploy` has not been adopted. Needs production database access to baseline.
+1. **C4 — migrations.** Production schema is still synced by `prisma db push`, now from the web service's start command (Render build containers cannot reach the database's internal hostname; pre-deploy commands are paid-plan only). `--accept-data-loss` is gone, so a destructive change fails the new instance and the previous release keeps serving, but the migrations directory is frozen at January and `prisma migrate deploy` has not been adopted. Needs production database access to baseline.
 2. **H9 / H37 — no rate limiting** on magic-link, check-email, team invite, change-email or codon submission. Input is now validated and bounded, but unlimited outbound mail and user enumeration remain.
 3. **H10 / H39 — environment provisioning.** `render.yaml` still does not declare `NEXT_PUBLIC_BASE_URL` (checkout `success_url` becomes `undefined/...`), `AWS_*`, `SHIPSTATION_API_KEY`, or the `TWIST_*` tokens the worker needs. If these are set by hand in the Render dashboard the site works; the file does not reproduce that.
 4. **Public-site honesty (Codex 11, 12, 17).** Navigation links to `/subscriptions`, `/services` and `/path-to-protein` 404; the strain "Add to Cart" is an inert placeholder; privacy and cookie pages stamp today's date as "Last updated" and describe practices the code does not implement.
@@ -46,7 +46,7 @@ There is still no `src/proxy.ts` (Next 16's name for `middleware.ts`), and the `
 | C1 | Strain & product purchases charged but not recorded | ✅ Fixed | `e9c1543` — all three item types persisted; totals asserted |
 | C2 | Shipping price trusted from client | ✅ Fixed | `e9c1543` recomputed from ShipStation; `4ffb044` closed the remaining hole where *omitting* the rate yielded $0 shipping |
 | C3 | Webhook not payment-aware / not idempotent | ✅ Fixed | `877515b` — `payment_status` check, `ProcessedWebhookEvent`, transaction, refund/dispute/async-failure handlers |
-| C4 | `db push --accept-data-loss` on deploy | 🟡 Partial | `9420262` — `npm run build` no longer runs `db push`; flag removed from `render.yaml`. **Baseline + `migrate deploy` still open** |
+| C4 | `db push --accept-data-loss` on deploy | 🟡 Partial | `9420262` — `npm run build` no longer runs `db push`; flag removed. Follow-up moved `db push` to the Render start command because the build container cannot reach the internal DB hostname. **Baseline + `migrate deploy` still open** |
 | C5 | Codon endpoint unbounded / ReDoS | ✅ Fixed (except throttling) | `273d351` — hard 10,000 aa cap, IUPAC-plus-bounded-quantifier pattern grammar, email required for guests, uuid ids. Rate limiting tracked as H37 |
 | H6 | Team login inherits owner identity and role | ✅ Fixed | `78b289e` — Session flagged, role forced to USER, identity-changing routes reject team sessions, primary user resolved first |
 | H7 | Any user can download non-public vector files | ✅ Fixed | `8fe8fe2`; `4ffb044` added the `isPublic` half of the predicate |
@@ -65,7 +65,7 @@ There is still no `src/proxy.ts` (Next 16's name for `middleware.ts`), and the `
 | M20 | Misleading comment in verify-email-change | ✅ Fixed | `78b289e` — route now actually checks team emails |
 | M21 | `notificationEmail` / `proteinName` unvalidated | ✅ Fixed | `273d351` |
 | M22 | Worker claim not atomic; no stale sweep | ✅ Fixed | `273d351` — `updateMany` guarded on PENDING; 30-min stale requeue; graceful SIGTERM |
-| M23 | Free-tier hosting for a transactional store | ❌ Open | Unchanged |
+| M23 | Free-tier hosting for a transactional store | 🟡 Partial | Postgres is now Basic-256mb (no point-in-time recovery); web service still free-tier, which also rules out Render pre-deploy commands |
 | M24 | No tests; no error/not-found/loading boundaries; no robots/sitemap | 🟡 Partial | 196 tests now cover optimizer core, validation, auth guards, checkout, webhook, admin routes, team routes. **Boundaries and SEO files still absent** |
 | L25 | `Math.random()` for ambiguous residues | ❌ Open | `codon-optimization.ts:268-270` |
 | L26 | Unsanitized filename in `Content-Disposition` | ❌ Open | `s3.ts:38` |
