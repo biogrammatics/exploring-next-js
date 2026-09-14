@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
     const job = await prisma.codonOptimizationJob.create({
       data: {
         proteinSequence: validation.cleanedSequence,
-        proteinName: sanitizeProteinName(proteinName),
+        proteinName: sanitizeProteinName(proteinName ?? validation.fastaHeader),
         targetOrganism,
         notificationEmail: storedEmail,
         userId: session?.user?.id || null,

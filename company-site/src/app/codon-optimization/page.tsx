@@ -54,6 +54,7 @@ export default function CodonOptimizationPage() {
   const [customExclusionPatterns, setCustomExclusionPatterns] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [errorDetails, setErrorDetails] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
 
   // Job tracking
@@ -105,6 +106,7 @@ export default function CodonOptimizationPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setErrorDetails([]);
     setWarnings([]);
     setIsSubmitting(true);
 
@@ -139,6 +141,7 @@ export default function CodonOptimizationPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        if (Array.isArray(data.details)) setErrorDetails(data.details);
         throw new Error(data.error || "Failed to submit job");
       }
 
@@ -460,8 +463,10 @@ export default function CodonOptimizationPage() {
                 className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
               />
               <p className="text-sm text-gray-500 mt-1">
-                Standard single-letter amino acid codes. Whitespace and numbers
-                will be removed.
+                The 20 standard single-letter amino acid codes, optionally ending
+                in a stop (*). A FASTA header line and whitespace are fine;
+                anything else (line numbers, ambiguity codes such as X or B) is
+                reported so you can fix it before submitting.
               </p>
             </div>
 
@@ -598,8 +603,18 @@ export default function CodonOptimizationPage() {
 
             {/* Error message */}
             {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
-                {error}
+              <div
+                role="alert"
+                className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800"
+              >
+                <strong>{error}</strong>
+                {errorDetails.length > 0 && (
+                  <ul className="list-disc ml-5 mt-2 space-y-1 text-sm">
+                    {errorDetails.map((d, i) => (
+                      <li key={i}>{d}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
 

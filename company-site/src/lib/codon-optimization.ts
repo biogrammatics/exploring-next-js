@@ -42,22 +42,33 @@ const CODON_TABLE: Record<string, string[]> = {
   '*': ['TAA', 'TAG', 'TGA'],                   // Stop
 };
 
-// Valid single-letter amino acid codes
-const VALID_AMINO_ACIDS = new Set(Object.keys(CODON_TABLE));
+/**
+ * The 20 standard amino acids. This — plus one optional trailing `*` — is
+ * the ONLY thing a protein sequence may contain. Ambiguity codes (B, Z, J,
+ * X) and the rare residues U/O are rejected with an explanation rather than
+ * silently resolved: substituting a residue changes the protein, and that
+ * decision belongs to the customer, not to the optimizer.
+ */
+export const STANDARD_AMINO_ACIDS = 'ACDEFGHIKLMNPQRSTVWY';
+const STANDARD_AA_SET = new Set(STANDARD_AMINO_ACIDS);
 
-// Additional valid characters in protein sequences
-const VALID_SEQUENCE_CHARS = new Set([
-  ...VALID_AMINO_ACIDS,
-  'X',  // Unknown amino acid
-  'B',  // Aspartic acid or Asparagine (D or N)
-  'Z',  // Glutamic acid or Glutamine (E or Q)
-  'J',  // Leucine or Isoleucine (L or I)
-  'U',  // Selenocysteine (rare, treat as C)
-  'O',  // Pyrrolysine (rare, treat as K)
-]);
+/** Explanations for characters people commonly paste that are not amino acids. */
+const REJECTED_CHAR_REASONS: Record<string, string> = {
+  B: 'B is an ambiguity code (Asp or Asn). Replace it with D or N.',
+  Z: 'Z is an ambiguity code (Glu or Gln). Replace it with E or Q.',
+  J: 'J is an ambiguity code (Leu or Ile). Replace it with L or I.',
+  X: 'X means "unknown residue". Replace it with the intended amino acid.',
+  U: 'U (selenocysteine) is not supported. Use C if a cysteine is intended.',
+  O: 'O (pyrrolysine) is not supported. Use K if a lysine is intended.',
+  '*': 'A stop (*) is only allowed as the final character.',
+};
 
-/** Hard upper bound on accepted protein length (amino acids). Longer input is rejected. */
-export const MAX_PROTEIN_LENGTH = 10000;
+/**
+ * Safety ceiling on accepted protein length (amino acids). Any real protein
+ * fits: the largest known, titin, is about 35,000 aa. The limit exists only
+ * to bound CPU and memory for a single job, not to restrict customers.
+ */
+export const MAX_PROTEIN_LENGTH = 50000;
 /** Above this length we accept the sequence but warn that processing will be slow. */
 export const LONG_PROTEIN_WARNING_LENGTH = 5000;
 
@@ -164,6 +175,8 @@ export interface ValidationResult {
   warnings: string[];
   cleanedSequence: string;
   length: number;
+  /** Text of a leading FASTA header line (without ">"), if one was supplied. */
+  fastaHeader?: string;
 }
 
 export interface OptimizationResult {
@@ -189,13 +202,22 @@ export function validateProteinSequence(sequence: string): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // Remove whitespace, numbers, and common formatting
-  let cleaned = sequence
-    .toUpperCase()
-    .replace(/[\s\d\-\.]/g, '')
-    .replace(/[^A-Z*]/g, '');
+  // Accept one leading FASTA header line (">name ...") and drop it.
+  let fastaHeader: string | undefined;
+  let body = sequence;
+  const firstNonBlank = body.search(/\S/);
+  if (firstNonBlank !== -1 && body[firstNonBlank] === '>') {
+    const lineEnd = body.indexOf('\n', firstNonBlank);
+    const headerLine = lineEnd === -1 ? body.slice(firstNonBlank) : body.slice(firstNonBlank, lineEnd);
+    fastaHeader = headerLine.slice(1).trim() || undefined;
+    body = lineEnd === -1 ? '' : body.slice(lineEnd + 1);
+  }
 
-  // Strip exactly one trailing stop codon; the worker adds its own terminator.
+  // Whitespace (spaces, tabs, line breaks) is the only formatting tolerated.
+  // Case is normalised. Everything else must be reported, not stripped.
+  let cleaned = body.replace(/\s+/g, '').toUpperCase();
+
+  // Exactly one trailing stop codon is allowed; the worker adds its own terminator.
   if (cleaned.endsWith('*')) {
     cleaned = cleaned.slice(0, -1);
   }
@@ -203,47 +225,48 @@ export function validateProteinSequence(sequence: string): ValidationResult {
   if (cleaned.length === 0) {
     return {
       isValid: false,
-      errors: ['Sequence is empty after cleaning'],
+      errors: ['No amino acids found. Paste a protein sequence using the 20 standard single-letter codes.'],
       warnings: [],
       cleanedSequence: '',
       length: 0,
+      fastaHeader,
     };
   }
 
-  // Check for invalid characters
-  const invalidChars = new Set<string>();
-  for (const char of cleaned) {
-    if (!VALID_SEQUENCE_CHARS.has(char)) {
-      invalidChars.add(char);
+  // Report every non-standard character with where it occurs (1-based), grouped
+  // by character so a pasted GenBank block with line numbers gives one clear
+  // message per offending symbol instead of hundreds of lines.
+  const positions = new Map<string, number[]>();
+  for (let i = 0; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (!STANDARD_AA_SET.has(ch)) {
+      const list = positions.get(ch) ?? [];
+      list.push(i + 1);
+      positions.set(ch, list);
     }
   }
 
-  if (invalidChars.size > 0) {
-    errors.push(`Invalid amino acid characters: ${Array.from(invalidChars).join(', ')}`);
-  }
-
-  // Check for ambiguous amino acids and warn
-  const ambiguousChars: string[] = [];
-  for (const char of cleaned) {
-    if (['X', 'B', 'Z', 'J', 'U', 'O'].includes(char)) {
-      ambiguousChars.push(char);
+  const MAX_POSITIONS_SHOWN = 5;
+  for (const [ch, pos] of positions) {
+    const shown = pos.slice(0, MAX_POSITIONS_SHOWN).join(', ');
+    const more = pos.length > MAX_POSITIONS_SHOWN ? ` and ${pos.length - MAX_POSITIONS_SHOWN} more` : '';
+    const where = `position${pos.length > 1 ? 's' : ''} ${shown}${more}`;
+    let reason = REJECTED_CHAR_REASONS[ch];
+    if (!reason) {
+      if (/[0-9]/.test(ch)) {
+        reason = 'Digits are not amino acids. Remove line numbers or coordinates before pasting.';
+      } else if (/[A-Z]/.test(ch)) {
+        reason = `"${ch}" is not one of the 20 standard amino acid codes (${STANDARD_AMINO_ACIDS}).`;
+      } else {
+        reason = `"${ch}" is not an amino acid code. Only the 20 standard letters and an optional final * are accepted.`;
+      }
     }
+    errors.push(`${reason} Found at ${where}.`);
   }
 
-  if (ambiguousChars.length > 0) {
-    warnings.push(`Sequence contains ambiguous amino acids that will be resolved: ${[...new Set(ambiguousChars)].join(', ')}`);
-  }
-
-  // Any remaining `*` is an internal stop codon (the trailing one was stripped above)
-  const internalStop = cleaned.indexOf('*');
-  if (internalStop !== -1) {
-    errors.push(`Internal stop codon at position ${internalStop + 1}`);
-  }
-
-  // Check sequence length
   if (cleaned.length > MAX_PROTEIN_LENGTH) {
     errors.push(
-      `Sequence is too long (${cleaned.length} aa). Maximum is ${MAX_PROTEIN_LENGTH.toLocaleString()} aa.`
+      `Sequence is too long (${cleaned.length.toLocaleString()} aa). The service accepts up to ${MAX_PROTEIN_LENGTH.toLocaleString()} aa, which covers every known natural protein.`
     );
   } else if (cleaned.length > LONG_PROTEIN_WARNING_LENGTH) {
     warnings.push(
@@ -257,6 +280,7 @@ export function validateProteinSequence(sequence: string): ValidationResult {
     warnings,
     cleanedSequence: cleaned,
     length: cleaned.length,
+    fastaHeader,
   };
 }
 

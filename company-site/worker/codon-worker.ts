@@ -118,49 +118,24 @@ function preprocessProteinSequence(sequence: string): {
     processed = processed.slice(0, -1);
   }
 
-  // Handle ambiguous amino acids
-  const processed_chars: string[] = [];
-  for (const aa of processed) {
-    switch (aa) {
-      case "B": // Aspartate or Asparagine
-        processed_chars.push(Math.random() < 0.5 ? "D" : "N");
-        break;
-      case "Z": // Glutamate or Glutamine
-        processed_chars.push(Math.random() < 0.5 ? "E" : "Q");
-        break;
-      case "J": // Leucine or Isoleucine
-        processed_chars.push(Math.random() < 0.5 ? "L" : "I");
-        break;
-      case "U": // Selenocysteine -> Cysteine
-        processed_chars.push("C");
-        break;
-      case "O": // Pyrrolysine -> Lysine
-        processed_chars.push("K");
-        break;
-      case "X": {
-        // Unknown -> random standard AA
-        const standardAAs = "ACDEFGHIKLMNPQRSTVWY";
-        processed_chars.push(
-          standardAAs[Math.floor(Math.random() * standardAAs.length)]
-        );
-        break;
-      }
-      default:
-        // Standard amino acids
-        if ("ACDEFGHIKLMNPQRSTVWY".includes(aa)) {
-          processed_chars.push(aa);
-        } else {
-          return {
-            success: false,
-            error: `Invalid amino acid character: ${aa}`,
-          };
-        }
+  // Strict alphabet: the 20 standard amino acids only. The API already
+  // enforces this; here it is a last line of defence for jobs queued before
+  // that rule existed. We never substitute or randomise a residue — that
+  // would change the protein the customer asked for.
+  const STANDARD = "ACDEFGHIKLMNPQRSTVWY";
+  for (let i = 0; i < processed.length; i++) {
+    const aa = processed[i];
+    if (!STANDARD.includes(aa)) {
+      return {
+        success: false,
+        error: `Unsupported character "${aa}" at position ${i + 1}. Only the 20 standard amino acids (${STANDARD}) and an optional final * are accepted; ambiguity codes (B, Z, J, X) and U/O must be resolved by the submitter.`,
+      };
     }
   }
 
   return {
     success: true,
-    processedSequence: processed_chars.join(""),
+    processedSequence: processed,
   };
 }
 
