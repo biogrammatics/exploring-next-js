@@ -64,13 +64,15 @@ const REJECTED_CHAR_REASONS: Record<string, string> = {
 };
 
 /**
- * Safety ceiling on accepted protein length (amino acids). Any real protein
- * fits: the largest known, titin, is about 35,000 aa. The limit exists only
- * to bound CPU and memory for a single job, not to restrict customers.
+ * Maximum protein length the self-service tool accepts. Above this the
+ * request is a custom project: 2,500 aa is ~7.5 kb of coding sequence and
+ * Twist's synthesis ceiling is about 7 kb, so longer constructs need to be
+ * split and assembled, which is quoted work rather than an online job.
  */
-export const MAX_PROTEIN_LENGTH = 50000;
-/** Above this length we accept the sequence but warn that processing will be slow. */
-export const LONG_PROTEIN_WARNING_LENGTH = 5000;
+export const MAX_PROTEIN_LENGTH = 2500;
+
+export const TOO_LONG_MESSAGE = (length: number) =>
+  `Sequence is ${length.toLocaleString()} aa; this tool accepts up to ${MAX_PROTEIN_LENGTH.toLocaleString()} aa (about ${(MAX_PROTEIN_LENGTH * 3 / 1000).toFixed(1)} kb of DNA). Longer proteins exceed Twist's ~7 kb synthesis limit and are handled as a custom project: contact us and we will quote a split-and-assemble design.`;
 
 /**
  * Exclusion-pattern validator for user-supplied restriction-site patterns.
@@ -265,13 +267,7 @@ export function validateProteinSequence(sequence: string): ValidationResult {
   }
 
   if (cleaned.length > MAX_PROTEIN_LENGTH) {
-    errors.push(
-      `Sequence is too long (${cleaned.length.toLocaleString()} aa). The service accepts up to ${MAX_PROTEIN_LENGTH.toLocaleString()} aa, which covers every known natural protein.`
-    );
-  } else if (cleaned.length > LONG_PROTEIN_WARNING_LENGTH) {
-    warnings.push(
-      `Sequence is very long (>${LONG_PROTEIN_WARNING_LENGTH.toLocaleString()} aa). Processing may take longer.`
-    );
+    errors.push(TOO_LONG_MESSAGE(cleaned.length));
   }
 
   return {

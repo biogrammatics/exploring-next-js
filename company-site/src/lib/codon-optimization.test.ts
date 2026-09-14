@@ -74,16 +74,20 @@ describe("validateProteinSequence", () => {
     expect(result.errors.length).toBe(3); // X, 1, B
   });
 
-  it("rejects sequences above the safety ceiling and explains it covers every known protein", () => {
+  it("rejects sequences above 2,500 aa and points the client to a custom project", () => {
     const result = validateProteinSequence("A".repeat(MAX_PROTEIN_LENGTH + 1));
     expect(result.isValid).toBe(false);
-    expect(result.errors.some((e) => e.includes("too long") && e.includes("known natural protein"))).toBe(true);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toMatch(/2,501 aa/);
+    expect(result.errors[0]).toMatch(/up to 2,500 aa/);
+    expect(result.errors[0]).toMatch(/Twist.*7 kb/);
+    expect(result.errors[0]).toMatch(/custom project/);
   });
 
-  it("accepts a sequence of exactly MAX_PROTEIN_LENGTH (titin-sized proteins fit)", () => {
+  it("accepts a sequence of exactly MAX_PROTEIN_LENGTH", () => {
     const result = validateProteinSequence("A".repeat(MAX_PROTEIN_LENGTH));
     expect(result.isValid).toBe(true);
-    expect(MAX_PROTEIN_LENGTH).toBeGreaterThanOrEqual(35000);
+    expect(MAX_PROTEIN_LENGTH).toBe(2500);
   });
 
   it("rejects an empty sequence with guidance", () => {

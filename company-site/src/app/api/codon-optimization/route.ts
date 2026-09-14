@@ -6,6 +6,7 @@ import {
   validateProteinSequence,
   validateExclusionPattern,
   MAX_PROTEIN_LENGTH,
+  TOO_LONG_MESSAGE,
   MAX_EXCLUSION_PATTERNS,
 } from "@/lib/codon-optimization";
 import { isValidEmail, normalizeEmail } from "@/lib/identity";
@@ -56,9 +57,12 @@ export async function POST(request: NextRequest) {
 
     // Cheap early exit before running the cleaning pass on a huge payload
     if (proteinSequence.length > MAX_RAW_SEQUENCE_CHARS) {
+      // Raw length includes whitespace and any FASTA header, so this is a
+      // conservative pre-check; the exact count is reported after cleaning.
       return NextResponse.json(
         {
-          error: `Protein sequence is too long. Maximum is ${MAX_PROTEIN_LENGTH.toLocaleString()} amino acids.`,
+          error: "Invalid protein sequence",
+          details: [TOO_LONG_MESSAGE(proteinSequence.replace(/\s+/g, "").length)],
         },
         { status: 400 }
       );

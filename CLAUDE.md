@@ -84,7 +84,8 @@ do not re-implement.
   tolerates whitespace and one FASTA header line, and reports every other
   character with its position and a fix; nothing is silently stripped or
   substituted (ambiguity codes are rejected, never randomised). Length is
-  bounded only by a 50,000 aa safety ceiling. `validateExclusionPattern`
+  capped at 2,500 aa (Twist synthesis ~7 kb); longer proteins are custom
+  projects and the error says so. `validateExclusionPattern`
   (IUPAC + `[...]` + `{n}` only; no commas, no regex metacharacters) are the
   only accepted validators for job submission. Known gap (AUDIT H49): the
   optimizers do not expand IUPAC codes, so `GCN` currently matches nothing;

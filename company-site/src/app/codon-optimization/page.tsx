@@ -464,9 +464,10 @@ export default function CodonOptimizationPage() {
               />
               <p className="text-sm text-gray-500 mt-1">
                 The 20 standard single-letter amino acid codes, optionally ending
-                in a stop (*). A FASTA header line and whitespace are fine;
-                anything else (line numbers, ambiguity codes such as X or B) is
-                reported so you can fix it before submitting.
+                in a stop (*), up to 2,500 aa. A FASTA header line and whitespace
+                are fine; anything else (line numbers, ambiguity codes such as X
+                or B) is reported so you can fix it before submitting. Longer
+                proteins are handled as a custom project.
               </p>
             </div>
 

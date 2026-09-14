@@ -61,7 +61,7 @@ Commits referenced:
   - A terminal `*` is stripped consistently by API and worker (previously every FASTA-style paste failed).
 - Tests: `src/lib/codon-optimization.test.ts`, `src/app/api/codon-optimization/route.test.ts`.
 - 2026-09-13: per-IP submission limit (10/hour, in-memory, single-instance) via `src/lib/rate-limit.ts`.
-- 2026-09-13: protein intake is strict — the 20 standard amino acids plus one optional trailing `*`, whitespace and a FASTA header tolerated, everything else rejected with a per-character explanation the client displays; the worker no longer randomises ambiguity codes. Length ceiling raised to 50,000 aa (above titin) so it bounds compute, not customers.
+- 2026-09-13: protein intake is strict — the 20 standard amino acids plus one optional trailing `*`, whitespace and a FASTA header tolerated, everything else rejected with a per-character explanation the client displays; the worker no longer randomises ambiguity codes. Length capped at 2,500 aa by business rule (~7.5 kb; Twist synthesis tops out near 7 kb), with the error telling the client that longer proteins are a custom project.
 - Not done: authentication requirement for full jobs (guest submission was kept as a product decision, now gated on a valid email); shared-store rate limits and concurrency quotas (AUDIT H37); claim tokens so a stale worker cannot overwrite a newer attempt (AUDIT M54); IUPAC motif semantics — accepted codes are not expanded by the optimizers (AUDIT H49, Astra A5); a per-job wall-clock deadline — the optimizer is synchronous, so this needs a `worker_threads` Worker (AUDIT H38); recording algorithm version, input hash and seed for reproducibility.
 
 ## P1: Security, authorization, and correctness
