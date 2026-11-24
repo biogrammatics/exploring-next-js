@@ -1,6 +1,7 @@
 import { z } from "zod";
-import type { OrderStatus } from "@/generated/prisma/client";
+import type { OrderStatus, QuoteStatus } from "@/generated/prisma/client";
 import { ORDER_STATUSES } from "@/lib/order-status";
+import { QUOTE_STATUSES, MAX_ADMIN_NOTES_LENGTH } from "@/lib/quote-status";
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -100,3 +101,33 @@ export function formatZodError(error: z.ZodError<unknown>) {
 export const updateOrderStatusSchema = z.object({
   status: z.enum(ORDER_STATUSES as [OrderStatus, ...OrderStatus[]]),
 });
+
+// ── Service quote schemas ───────────────────────────────────────────
+
+/**
+ * Admin edits to a service quote. Both fields are optional so the form can
+ * send a status change, a note, or both.
+ *
+ * The customer's own submitted details (address, protein, design) are NOT
+ * editable: that block is the record of what they asked for, and silently
+ * rewriting it would lose the only account of the request. Corrections belong
+ * in adminNotes.
+ *
+ * `expectedStatus` is what the admin's screen was showing. The handler applies
+ * the change only while the row still holds it, so a stale tab cannot
+ * overwrite a colleague's edit.
+ */
+export const updateQuoteSchema = z
+  .object({
+    status: z.enum(QUOTE_STATUSES as [QuoteStatus, ...QuoteStatus[]]).optional(),
+    expectedStatus: z
+      .enum(QUOTE_STATUSES as [QuoteStatus, ...QuoteStatus[]])
+      .optional(),
+    adminNotes: z.string().max(MAX_ADMIN_NOTES_LENGTH).nullable().optional(),
+  })
+  .refine((v) => v.status !== undefined || v.adminNotes !== undefined, {
+    message: "Provide a status, a note, or both",
+  })
+  .refine((v) => v.status === undefined || v.expectedStatus !== undefined, {
+    message: "A status change must say which status it is replacing",
+  });

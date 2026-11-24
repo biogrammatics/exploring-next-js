@@ -15,6 +15,7 @@ export function AdminSidebar({ isSuperAdmin }: AdminSidebarProps) {
     { href: "/admin/vectors", label: "Vectors" },
     { href: "/admin/strains", label: "Strains" },
     { href: "/admin/orders", label: "Orders" },
+    { href: "/admin/quotes", label: "Design requests" },
     { href: "/admin/users", label: "Users" },
     { href: "/admin/twist-test", label: "Twist API" },
     { href: "/admin/twilio-test", label: "Twilio SMS" },
