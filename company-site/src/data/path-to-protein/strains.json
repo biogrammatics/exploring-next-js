@@ -1,0 +1,347 @@
+[
+  {
+    "name": "BG08",
+    "genotype": "",
+    "description": "",
+    "mutS": false,
+    "glyco": false,
+    "proteases": [],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": true
+  },
+  {
+    "name": "BG09",
+    "genotype": "lys2∆::hygromycin, arg4∆::nourseothricin",
+    "description": "Pichia (Komagataella phaffii) expression strain for SILAC (stable isotope) labeling with arginine and/or lysine",
+    "mutS": false,
+    "glyco": false,
+    "proteases": [],
+    "silac": true,
+    "builtInMarkers": [
+      "hygromycin",
+      "nourseothricin"
+    ],
+    "incomplete": false
+  },
+  {
+    "name": "BG10",
+    "genotype": "WT, cured of cytoplasmic killer plasmids",
+    "description": "Wild type Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": false,
+    "proteases": [],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "BG11",
+    "genotype": "aox1-∆1",
+    "description": "Mut (methanol utilization) slow Pichia (Komagataella phaffii) expression strain",
+    "mutS": true,
+    "glyco": false,
+    "proteases": [],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "BG12",
+    "genotype": "his4-∆1",
+    "description": "Histidine auxotrophic Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": false,
+    "proteases": [],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "BG13",
+    "genotype": "",
+    "description": "",
+    "mutS": false,
+    "glyco": false,
+    "proteases": [],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": true
+  },
+  {
+    "name": "BG20",
+    "genotype": "pep4-∆1",
+    "description": "Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": false,
+    "proteases": [
+      "pep4"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "BG21",
+    "genotype": "sub2-∆1",
+    "description": "Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": false,
+    "proteases": [
+      "sub2"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "BG22",
+    "genotype": "prb1-∆1",
+    "description": "Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": false,
+    "proteases": [
+      "prb1"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "BG23",
+    "genotype": "pep4-∆1, sub2-∆1",
+    "description": "Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": false,
+    "proteases": [
+      "pep4",
+      "sub2"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "BG24",
+    "genotype": "pep4-∆1, prb1-∆1",
+    "description": "Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": false,
+    "proteases": [
+      "pep4",
+      "prb1"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "BG25",
+    "genotype": "yps1-∆1",
+    "description": "Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": false,
+    "proteases": [
+      "yps1"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "BG26",
+    "genotype": "prb1-∆1, sub2-∆1",
+    "description": "Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": false,
+    "proteases": [
+      "prb1",
+      "sub2"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "BG40",
+    "genotype": "pep4-∆1, aox1-∆1",
+    "description": "Pichia (Komagataella phaffii) expression strain",
+    "mutS": true,
+    "glyco": false,
+    "proteases": [
+      "pep4"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "BG43",
+    "genotype": "pep4-∆1, sub2-∆1, aox1-∆1",
+    "description": "Pichia (Komagataella phaffii) expression strain",
+    "mutS": true,
+    "glyco": false,
+    "proteases": [
+      "pep4",
+      "sub2"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "BG44",
+    "genotype": "pep4-∆1, prb1-∆1, aox1-∆1",
+    "description": "Pichia (Komagataella phaffii) expression strain",
+    "mutS": true,
+    "glyco": false,
+    "proteases": [
+      "pep4",
+      "prb1"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "BG45",
+    "genotype": "yps1-∆1, aox1-∆1",
+    "description": "Pichia (Komagataella phaffii) expression strain",
+    "mutS": true,
+    "glyco": false,
+    "proteases": [
+      "yps1"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "SuperMan5-10",
+    "genotype": "och1-∆1, GAP-mannosidaseHDEL",
+    "description": "GlycoSwitch® Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": true,
+    "proteases": [],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "SuperMan5-11",
+    "genotype": "och1-∆1, GAP-mannosidaseHDEL, aox1-∆1",
+    "description": "GlycoSwitch® Pichia (Komagataella phaffii) expression strain",
+    "mutS": true,
+    "glyco": true,
+    "proteases": [],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "SuperMan5-12",
+    "genotype": "och1-∆1, GAP-mannosidaseHDEL, his4-∆1",
+    "description": "GlycoSwitch® Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": true,
+    "proteases": [],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "SuperMan5-20",
+    "genotype": "och1-∆1, GAP-mannosidaseHDEL, pep4-∆1",
+    "description": "GlycoSwitch® Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": true,
+    "proteases": [
+      "pep4"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "SuperMan5-22",
+    "genotype": "och1-∆1, GAP-mannosidaseHDEL, prb1-∆1",
+    "description": "GlycoSwitch® Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": true,
+    "proteases": [
+      "prb1"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "SuperMan5-23",
+    "genotype": "och1-∆1, GAP-mannosidaseHDEL, pep4-∆1, sub2-∆1",
+    "description": "GlycoSwitch® Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": true,
+    "proteases": [
+      "pep4",
+      "sub2"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "SuperMan5-24",
+    "genotype": "och1-∆1, GAP-mannosidaseHDEL, pep4-∆1, prb1-∆1",
+    "description": "GlycoSwitch® Pichia (Komagataella phaffii) expression strain",
+    "mutS": false,
+    "glyco": true,
+    "proteases": [
+      "pep4",
+      "prb1"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "SuperMan5-40",
+    "genotype": "och1-∆1, GAP-mannosidaseHDEL, pep4-∆1, aox1-∆1",
+    "description": "GlycoSwitch® Pichia (Komagataella phaffii) expression strain",
+    "mutS": true,
+    "glyco": true,
+    "proteases": [
+      "pep4"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "SuperMan5-43",
+    "genotype": "och1-∆1, GAP-mannosidaseHDEL, pep4-∆1, sub2-∆1, aox1-∆1",
+    "description": "GlycoSwitch® Pichia (Komagataella phaffii) expression strain",
+    "mutS": true,
+    "glyco": true,
+    "proteases": [
+      "pep4",
+      "sub2"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  },
+  {
+    "name": "SuperMan5-44",
+    "genotype": "och1-∆1, GAP-mannosidaseHDEL, pep4-∆1, prb1-∆1, aox1-∆1",
+    "description": "GlycoSwitch® Pichia (Komagataella phaffii) expression strain",
+    "mutS": true,
+    "glyco": true,
+    "proteases": [
+      "pep4",
+      "prb1"
+    ],
+    "silac": false,
+    "builtInMarkers": [],
+    "incomplete": false
+  }
+]

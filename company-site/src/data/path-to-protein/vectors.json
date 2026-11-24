@@ -1,0 +1,449 @@
+[
+  {
+    "name": "pJAG v2",
+    "series": "J",
+    "promoter": "aox1",
+    "promoterLabel": "AOX1 promoter (Pme I cut)",
+    "marker": "G418 (geneticin)",
+    "bp": 4841,
+    "ars": true,
+    "lox": false,
+    "arms": "",
+    "window": 300,
+    "cutters": "AleI, NruI, PmeI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      1000,
+      1170
+    ]
+  },
+  {
+    "name": "pJAH v2",
+    "series": "J",
+    "promoter": "aox1",
+    "promoterLabel": "AOX1 promoter (Pme I cut)",
+    "marker": "Hygromycin B",
+    "bp": 5060,
+    "ars": true,
+    "lox": false,
+    "arms": "",
+    "window": 300,
+    "cutters": "AleI, NruI, PmeI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      1000,
+      1170
+    ]
+  },
+  {
+    "name": "pJAN v2",
+    "series": "J",
+    "promoter": "aox1",
+    "promoterLabel": "AOX1 promoter (Pme I cut)",
+    "marker": "Nourseothricin (NTC)",
+    "bp": 4601,
+    "ars": true,
+    "lox": false,
+    "arms": "",
+    "window": 300,
+    "cutters": "AleI, NruI, PmeI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      1000,
+      1170
+    ]
+  },
+  {
+    "name": "pJAZ v2",
+    "series": "J",
+    "promoter": "aox1",
+    "promoterLabel": "AOX1 promoter (Pme I cut)",
+    "marker": "Zeocin",
+    "bp": 4406,
+    "ars": true,
+    "lox": false,
+    "arms": "",
+    "window": 300,
+    "cutters": "AleI, NruI, PmeI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      1000,
+      1170
+    ]
+  },
+  {
+    "name": "pJUsG v2",
+    "series": "J",
+    "promoter": "upp",
+    "promoterLabel": "UPP promoter (with Ale I / EcoR V stuffer)",
+    "marker": "G418 (geneticin)",
+    "bp": 4987,
+    "ars": true,
+    "lox": false,
+    "arms": "",
+    "window": 301,
+    "cutters": "AleI, EcoRV, NruI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      1146,
+      1316
+    ]
+  },
+  {
+    "name": "pJUsH v2",
+    "series": "J",
+    "promoter": "upp",
+    "promoterLabel": "UPP promoter (with Ale I / EcoR V stuffer)",
+    "marker": "Hygromycin B",
+    "bp": 5206,
+    "ars": true,
+    "lox": false,
+    "arms": "",
+    "window": 301,
+    "cutters": "AleI, EcoRV, NruI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      1146,
+      1316
+    ]
+  },
+  {
+    "name": "pJUsN v2",
+    "series": "J",
+    "promoter": "upp",
+    "promoterLabel": "UPP promoter (with Ale I / EcoR V stuffer)",
+    "marker": "Nourseothricin (NTC)",
+    "bp": 4747,
+    "ars": true,
+    "lox": false,
+    "arms": "",
+    "window": 301,
+    "cutters": "AleI, EcoRV, NruI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      1146,
+      1316
+    ]
+  },
+  {
+    "name": "pJUsZ v2",
+    "series": "J",
+    "promoter": "upp",
+    "promoterLabel": "UPP promoter (with Ale I / EcoR V stuffer)",
+    "marker": "Zeocin",
+    "bp": 4552,
+    "ars": true,
+    "lox": false,
+    "arms": "",
+    "window": 301,
+    "cutters": "AleI, EcoRV, NruI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      1146,
+      1316
+    ]
+  },
+  {
+    "name": "pJ_G v2",
+    "series": "J",
+    "promoter": "none",
+    "promoterLabel": "none (promoterless)",
+    "marker": "G418 (geneticin)",
+    "bp": 3902,
+    "ars": true,
+    "lox": false,
+    "arms": "",
+    "window": "",
+    "cutters": "NruI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      65,
+      235
+    ]
+  },
+  {
+    "name": "pJ_H v2",
+    "series": "J",
+    "promoter": "none",
+    "promoterLabel": "none (promoterless)",
+    "marker": "Hygromycin B",
+    "bp": 4121,
+    "ars": true,
+    "lox": false,
+    "arms": "",
+    "window": "",
+    "cutters": "NruI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      65,
+      235
+    ]
+  },
+  {
+    "name": "pJ_N v2",
+    "series": "J",
+    "promoter": "none",
+    "promoterLabel": "none (promoterless)",
+    "marker": "Nourseothricin (NTC)",
+    "bp": 3662,
+    "ars": true,
+    "lox": false,
+    "arms": "",
+    "window": "",
+    "cutters": "NruI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      65,
+      235
+    ]
+  },
+  {
+    "name": "pJ_Z v2",
+    "series": "J",
+    "promoter": "none",
+    "promoterLabel": "none (promoterless)",
+    "marker": "Zeocin",
+    "bp": 3467,
+    "ars": true,
+    "lox": false,
+    "arms": "",
+    "window": "",
+    "cutters": "NruI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      65,
+      235
+    ]
+  },
+  {
+    "name": "pSAH v2",
+    "series": "S",
+    "promoter": "aox1",
+    "promoterLabel": "AOX1 promoter (Pme I cut)",
+    "marker": "Hygromycin B",
+    "bp": 5127,
+    "ars": true,
+    "lox": true,
+    "arms": "",
+    "window": 300,
+    "cutters": "AleI, NruI, PmeI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      1000,
+      1170
+    ]
+  },
+  {
+    "name": "pSAH-T1",
+    "series": "S",
+    "promoter": "aox1",
+    "promoterLabel": "AOX1 promoter",
+    "marker": "Hygromycin B",
+    "bp": 6190,
+    "ars": false,
+    "lox": true,
+    "arms": "T1 Double Crossover Homology Arms (Nru I cut)",
+    "window": 28,
+    "cutters": "AleI, EcoRV, NotI, NruI, PmeI, SfiI",
+    "variant": "targeted",
+    "arsInStuffer": false,
+    "arsCoords": null
+  },
+  {
+    "name": "pSAN v2",
+    "series": "S",
+    "promoter": "aox1",
+    "promoterLabel": "AOX1 promoter (Pme I cut)",
+    "marker": "Nourseothricin (NTC)",
+    "bp": 4668,
+    "ars": true,
+    "lox": true,
+    "arms": "",
+    "window": 300,
+    "cutters": "AleI, NruI, PmeI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      1000,
+      1170
+    ]
+  },
+  {
+    "name": "pSAN-T9",
+    "series": "S",
+    "promoter": "aox1",
+    "promoterLabel": "AOX1 promoter",
+    "marker": "Nourseothricin (NTC)",
+    "bp": 5670,
+    "ars": false,
+    "lox": true,
+    "arms": "T9 Double Crossover Homology Arms",
+    "window": 28,
+    "cutters": "AleI, EcoRV, NotI, NruI, PmeI, SfiI",
+    "variant": "targeted",
+    "arsInStuffer": false,
+    "arsCoords": null
+  },
+  {
+    "name": "pSAZ v2",
+    "series": "S",
+    "promoter": "aox1",
+    "promoterLabel": "AOX1 promoter (Pme I cut)",
+    "marker": "Zeocin",
+    "bp": 4473,
+    "ars": true,
+    "lox": true,
+    "arms": "",
+    "window": 300,
+    "cutters": "AleI, NruI, PmeI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      1000,
+      1170
+    ]
+  },
+  {
+    "name": "pSAZ-T6",
+    "series": "S",
+    "promoter": "aox1",
+    "promoterLabel": "AOX1 promoter",
+    "marker": "Zeocin",
+    "bp": 5528,
+    "ars": false,
+    "lox": true,
+    "arms": "T6 Double Cross Over Homology Arms",
+    "window": 28,
+    "cutters": "AleI, EcoRV, NotI, NruI, PmeI, SfiI",
+    "variant": "targeted",
+    "arsInStuffer": false,
+    "arsCoords": null
+  },
+  {
+    "name": "pSUsH v2",
+    "series": "S",
+    "promoter": "upp",
+    "promoterLabel": "UPP promoter (with Ale I / EcoR V stuffer)",
+    "marker": "Hygromycin B",
+    "bp": 5273,
+    "ars": true,
+    "lox": true,
+    "arms": "",
+    "window": 301,
+    "cutters": "AleI, EcoRV, NruI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      1146,
+      1316
+    ]
+  },
+  {
+    "name": "pSUsN v2",
+    "series": "S",
+    "promoter": "upp",
+    "promoterLabel": "UPP promoter (with Ale I / EcoR V stuffer)",
+    "marker": "Nourseothricin (NTC)",
+    "bp": 4814,
+    "ars": true,
+    "lox": true,
+    "arms": "",
+    "window": 301,
+    "cutters": "AleI, EcoRV, NruI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      1146,
+      1316
+    ]
+  },
+  {
+    "name": "pSUsZ v2",
+    "series": "S",
+    "promoter": "upp",
+    "promoterLabel": "UPP promoter (with Ale I / EcoR V stuffer)",
+    "marker": "Zeocin",
+    "bp": 4619,
+    "ars": true,
+    "lox": true,
+    "arms": "",
+    "window": 301,
+    "cutters": "AleI, EcoRV, NruI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      1146,
+      1316
+    ]
+  },
+  {
+    "name": "pS_H v2",
+    "series": "S",
+    "promoter": "none",
+    "promoterLabel": "none (promoterless)",
+    "marker": "Hygromycin B",
+    "bp": 4192,
+    "ars": true,
+    "lox": true,
+    "arms": "",
+    "window": "",
+    "cutters": "NruI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      65,
+      235
+    ]
+  },
+  {
+    "name": "pS_N v2",
+    "series": "S",
+    "promoter": "none",
+    "promoterLabel": "none (promoterless)",
+    "marker": "Nourseothricin (NTC)",
+    "bp": 3733,
+    "ars": true,
+    "lox": true,
+    "arms": "",
+    "window": "",
+    "cutters": "NruI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      65,
+      235
+    ]
+  },
+  {
+    "name": "pS_Z v2",
+    "series": "S",
+    "promoter": "none",
+    "promoterLabel": "none (promoterless)",
+    "marker": "Zeocin",
+    "bp": 3538,
+    "ars": true,
+    "lox": true,
+    "arms": "",
+    "window": "",
+    "cutters": "NruI, SfiI",
+    "variant": "v2",
+    "arsInStuffer": true,
+    "arsCoords": [
+      65,
+      235
+    ]
+  }
+]

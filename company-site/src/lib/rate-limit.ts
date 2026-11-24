@@ -112,4 +112,6 @@ export const RATE_LIMITS = {
   checkEmail: { name: "check-email", limit: 30, windowMs: FIFTEEN_MIN },
   /** CPU + mail: per IP. */
   codonSubmit: { name: "codon-submit", limit: 10, windowMs: ONE_HOUR },
+  /** Creates a record the team has to triage by hand: bound it per IP. */
+  quoteSubmit: { name: "quote-submit", limit: 5, windowMs: ONE_HOUR },
 } as const satisfies Record<string, RateLimitRule>;
