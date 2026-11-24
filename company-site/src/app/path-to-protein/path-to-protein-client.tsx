@@ -181,29 +181,33 @@ export default function PathToProteinClient({ prefill, signedIn, isTeamLogin }: 
   if (result) {
     return (
       <main className="mx-auto max-w-2xl px-4 py-16">
-        <h1 className="text-2xl font-semibold text-gray-900">Request received</h1>
-        <p className="mt-4 text-gray-700">
-          Thank you. Your design has been sent to our team, who review every request
-          by hand and will reply by email with a quote and any questions.
-        </p>
-        <p className="mt-4 rounded-md bg-gray-50 p-4 font-mono text-sm text-gray-800">
-          Reference: {result.quoteNumber}
-        </p>
-        <p className="mt-4 text-sm text-gray-600">
-          We have your address as <strong>{email || prefill.email}</strong>. Nothing
-          has been charged and no commitment has been made.
-        </p>
+        <div className="glass-panel p-6">
+          <h1 className="text-2xl font-semibold text-gray-900">Request received</h1>
+          <p className="mt-4 text-gray-700">
+            Thank you. Your design has been sent to our team, who review every request
+            by hand and will reply by email with a quote and any questions.
+          </p>
+          <p className="mt-4 rounded-md border border-gray-200 bg-white p-4 font-mono text-sm text-gray-800">
+            Reference: {result.quoteNumber}
+          </p>
+          <p className="mt-4 text-sm text-gray-600">
+            We have your address as <strong>{email || prefill.email}</strong>. Nothing
+            has been charged and no commitment has been made.
+          </p>
+        </div>
       </main>
     );
   }
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">
+      {/* Heading sits directly on the gradient, so it follows the house
+          treatment: white with a shadow, as on the codon-optimization page. */}
       <header className="mb-8">
-        <h1 className="text-3xl font-semibold text-gray-900">
+        <h1 className="text-3xl font-semibold text-white drop-shadow-lg">
           Design a custom Pichia strain
         </h1>
-        <p className="mt-3 max-w-2xl text-gray-700">
+        <p className="mt-3 max-w-2xl text-white/90 drop-shadow">
           Tell us about your protein and we will design and build a
           whole-genome-sequenced <em>Komagataella phaffii</em> expression strain.
           No pricing is shown here — our team reviews every request by hand and
@@ -670,12 +674,14 @@ export default function PathToProteinClient({ prefill, signedIn, isTeamLogin }: 
         </Section>
       )}
 
-      <nav className="mt-8 flex justify-between border-t border-gray-200 pt-4">
-        <button type="button" className={buttonClass} disabled={step === 1}
+      {/* No top border here: a gray hairline is invisible against most phases
+          of the background. The buttons carry their own opaque surface. */}
+      <nav className="mt-8 flex justify-between">
+        <button type="button" className={navButtonClass} disabled={step === 1}
           onClick={() => setStep((s) => Math.max(1, s - 1))}>
           Back
         </button>
-        <button type="button" className={buttonClass} disabled={step === STEPS.length}
+        <button type="button" className={navButtonClass} disabled={step === STEPS.length}
           onClick={() => setStep((s) => Math.min(STEPS.length, s + 1))}>
           Next
         </button>
@@ -687,14 +693,27 @@ export default function PathToProteinClient({ prefill, signedIn, isTeamLogin }: 
 /* ----------------------------- small pieces ----------------------------- */
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-900 focus:outline-none";
+  "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:border-gray-900 focus:outline-none";
+/** Inside a glass panel, so a plain bordered button is legible. */
 const buttonClass =
-  "rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-40";
+  "rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 hover:bg-gray-50 disabled:opacity-40";
+/** Sits directly on the animated background, so it needs its own surface. */
+const navButtonClass =
+  "rounded-md border border-white/40 bg-white/90 px-4 py-2 text-sm font-medium text-gray-900 shadow-sm backdrop-blur hover:bg-white disabled:opacity-40";
 const linkClass = "text-sm text-blue-700 underline";
 
+/**
+ * Every step's content sits on a glass panel.
+ *
+ * The site background is a fixed, animated cycle through seven gradients
+ * (globals.css), which passes through both a dark navy/red and a pale pink.
+ * No single text colour is readable across all of them, so body copy has to
+ * sit on an opaque surface rather than directly on the background — the same
+ * thing the catalog and codon-optimization pages do.
+ */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-6">
+    <section className="glass-panel space-y-6 p-6">
       <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
       {children}
     </section>
