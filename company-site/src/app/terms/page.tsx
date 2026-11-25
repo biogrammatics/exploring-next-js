@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Terms and Conditions | BioGrammatics",
+  // Bare title: the root layout's template appends "| BioGrammatics".
+  title: "Terms and Conditions",
   description: "Terms and conditions governing use of BioGrammatics services and website.",
 };
 

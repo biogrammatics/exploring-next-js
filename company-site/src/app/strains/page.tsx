@@ -1,6 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { publicStrainWhere } from "@/lib/visibility";
+
+export const metadata: Metadata = {
+  title: "Pichia Expression Strains",
+  description:
+    "Engineered Pichia pastoris (Komagataella phaffii) expression strains from BioGrammatics, including protease-deficient and glycoengineered hosts.",
+  alternates: { canonical: "/strains" },
+};
 
 export default async function StrainsPage() {
   const strains = await prisma.pichiaStrain.findMany({

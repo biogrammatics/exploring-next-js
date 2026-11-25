@@ -1,6 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { publicVectorWhere } from "@/lib/visibility";
+
+export const metadata: Metadata = {
+  title: "Pichia Expression Vectors",
+  description:
+    "Pichia pastoris (Komagataella phaffii) expression vectors from BioGrammatics: AOX1 and GAP promoters, secretion signals and selectable markers.",
+  alternates: { canonical: "/vectors" },
+};
 
 export default async function VectorsPage() {
   const vectors = await prisma.vector.findMany({

@@ -1,12 +1,61 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { isAdminRole } from "@/lib/auth-guards";
-import { isStrainPublic, PURCHASED_ORDER_STATUSES } from "@/lib/visibility";
+import { truncateForMeta } from "@/lib/site";
+import {
+  isStrainPublic,
+  publicStrainWhere,
+  PURCHASED_ORDER_STATUSES,
+} from "@/lib/visibility";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+/**
+ * Per-strain title and description. Same reasoning as the vector detail
+ * page: the lookup goes through `publicStrainWhere` so an unpublished
+ * strain's name never reaches a <title>, and such URLs are explicitly
+ * noindexed even though the page still renders for admins and purchasers.
+ */
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { id } = await params;
+
+  const strain = await prisma.pichiaStrain.findFirst({
+    where: { id, ...publicStrainWhere },
+    select: {
+      name: true,
+      description: true,
+      genotype: true,
+      phenotype: true,
+    },
+  });
+
+  if (!strain) {
+    return { title: "Strain", robots: { index: false, follow: false } };
+  }
+
+  const traits = [strain.genotype?.trim(), strain.phenotype?.trim()].filter(
+    (trait): trait is string => !!trait
+  );
+
+  const description = strain.description?.trim()
+    ? truncateForMeta(strain.description)
+    : truncateForMeta(
+        `${strain.name} is a Pichia pastoris (Komagataella phaffii) expression strain from BioGrammatics` +
+          (traits.length ? `: ${traits.join("; ")}.` : ".")
+      );
+
+  return {
+    title: `${strain.name} Pichia Expression Strain`,
+    description,
+    alternates: { canonical: `/strains/${id}` },
+  };
 }
 
 export default async function StrainDetailPage({ params }: PageProps) {

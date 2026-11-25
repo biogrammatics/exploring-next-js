@@ -4,7 +4,8 @@ import { prisma } from "@/lib/db";
 import PathToProteinClient, { type ContactPrefill } from "./path-to-protein-client";
 
 export const metadata: Metadata = {
-  title: "Design a custom Pichia strain | BioGrammatics",
+  // Bare title: the root layout's template appends "| BioGrammatics".
+  title: "Design a custom Pichia strain",
   description:
     "Tell us about your protein and we will design and build a whole-genome-sequenced Pichia expression strain. No pricing is shown; our team reviews every request by hand and replies with a quote.",
 };

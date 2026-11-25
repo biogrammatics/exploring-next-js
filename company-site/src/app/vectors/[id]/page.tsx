@@ -1,9 +1,15 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { isAdminRole } from "@/lib/auth-guards";
-import { isVectorPublic, PURCHASED_ORDER_STATUSES } from "@/lib/visibility";
+import { truncateForMeta } from "@/lib/site";
+import {
+  isVectorPublic,
+  publicVectorWhere,
+  PURCHASED_ORDER_STATUSES,
+} from "@/lib/visibility";
 import type { VectorFileType } from "@/generated/prisma/client";
 import { AddToCartButton } from "@/app/components/cart/add-to-cart-button";
 
@@ -28,6 +34,58 @@ function getFileTypeLabel(type: VectorFileType) {
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+/**
+ * Per-vector title and description.
+ *
+ * Every page on this site previously inherited the one root <title>, so the
+ * whole catalog looked like a single page to a search engine.
+ *
+ * The lookup goes through `publicVectorWhere`, not by id alone: the page
+ * below still renders for an admin previewing an unpublished vector and for
+ * a customer who has bought one, but an unpublished name must not leak into
+ * a <title>, a link preview or a search result. Anything not publicly
+ * visible gets a generic title and an explicit noindex.
+ */
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { id } = await params;
+
+  const vector = await prisma.vector.findFirst({
+    where: { id, ...publicVectorWhere },
+    select: {
+      name: true,
+      description: true,
+      vectorSize: true,
+      promoter: { select: { name: true } },
+      selectionMarker: { select: { name: true } },
+    },
+  });
+
+  if (!vector) {
+    return { title: "Vector", robots: { index: false, follow: false } };
+  }
+
+  const facts = [
+    vector.promoter?.name && `${vector.promoter.name} promoter`,
+    vector.selectionMarker?.name && `${vector.selectionMarker.name} selection`,
+    vector.vectorSize && `${vector.vectorSize.toLocaleString("en-US")} bp`,
+  ].filter((fact): fact is string => typeof fact === "string" && fact !== "");
+
+  const description = vector.description?.trim()
+    ? truncateForMeta(vector.description)
+    : truncateForMeta(
+        `${vector.name} is a Pichia pastoris expression vector from BioGrammatics` +
+          (facts.length ? `: ${facts.join(", ")}.` : ".")
+      );
+
+  return {
+    title: `${vector.name} Pichia Expression Vector`,
+    description,
+    alternates: { canonical: `/vectors/${id}` },
+  };
 }
 
 export default async function VectorDetailPage({ params }: PageProps) {

@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+// Title and description come from the root layout; this only pins the
+// canonical URL so the homepage is not confused with the many ways it can be
+// reached (trailing slash, query strings, the Render *.onrender.com host).
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 export default function Home() {
   return (
@@ -105,8 +113,10 @@ export default function Home() {
                   Expert consultation
                 </li>
               </ul>
+              {/* Was /services, which 404'd — the only CTA for the contract
+                  research business pointed at a missing page. */}
               <Link
-                href="/services"
+                href="/path-to-protein"
                 className="inline-block glass-button text-white px-6 py-2 rounded-lg"
               >
                 Learn More

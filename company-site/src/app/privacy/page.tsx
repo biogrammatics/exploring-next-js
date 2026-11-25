@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Privacy Policy | BioGrammatics",
+  // Bare title: the root layout's template appends "| BioGrammatics".
+  title: "Privacy Policy",
   description: "Learn how BioGrammatics collects, uses, and protects your personal information.",
 };
 

@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Cookie Policy | BioGrammatics",
+  // Bare title: the root layout's template appends "| BioGrammatics".
+  title: "Cookie Policy",
   description: "Learn how BioGrammatics uses cookies on our website.",
 };
 

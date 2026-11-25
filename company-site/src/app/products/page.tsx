@@ -1,5 +1,13 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { ProductCard } from "./product-card";
+
+export const metadata: Metadata = {
+  title: "Products",
+  description:
+    "Pichia protein expression products from BioGrammatics, including expression vectors, strains and related laboratory reagents.",
+  alternates: { canonical: "/products" },
+};
 
 export default async function ProductsPage() {
   const products = await prisma.product.findMany({
