@@ -81,12 +81,12 @@ export default function RootLayout({
 
                     "Services" linked to /services, which also 404'd — from
                     the primary nav, for the business that is ~90% of revenue.
-                    Pointed at the strain design request flow as the interim
-                    services entry point; it becomes
-                    /pichia-protein-expression-services once that page exists.
+                    It pointed at the strain design wizard as an interim entry
+                    point; now that the CRO services page exists it points
+                    there, which is what the nav label has always promised.
                   */}
                   <Link
-                    href="/path-to-protein"
+                    href="/pichia-protein-expression-services"
                     className="text-sm font-medium text-gray-700 hover:text-gray-900"
                   >
                     Services

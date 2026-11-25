@@ -17,8 +17,10 @@ export const dynamic = "force-dynamic";
 /**
  * Hand-maintained public routes, highest commercial value first.
  *
- * `/path-to-protein` ranks above the catalogs because contract research is
- * the business; the catalogs serve the reagent storefront. `/products` is
+ * `/pichia-protein-expression-services` ranks directly below the homepage: it
+ * is the page the business most needs to win, and the one the AI-search review
+ * found missing. `/path-to-protein` sits with the catalogs — it is a tool that
+ * feeds the CRO business rather than the page that explains it. `/products` is
  * listed last and low because it overlaps /vectors and /strains — that
  * duplication is a separate decision, not a sitemap problem.
  *
@@ -31,7 +33,12 @@ const STATIC_ROUTES: ReadonlyArray<{
   changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"];
 }> = [
   { path: "/", priority: 1.0, changeFrequency: "weekly" },
-  { path: "/path-to-protein", priority: 0.9, changeFrequency: "monthly" },
+  {
+    path: "/pichia-protein-expression-services",
+    priority: 0.9,
+    changeFrequency: "monthly",
+  },
+  { path: "/path-to-protein", priority: 0.8, changeFrequency: "monthly" },
   { path: "/vectors", priority: 0.8, changeFrequency: "weekly" },
   { path: "/strains", priority: 0.8, changeFrequency: "weekly" },
   { path: "/codon-optimization", priority: 0.7, changeFrequency: "monthly" },

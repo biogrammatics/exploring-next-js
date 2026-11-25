@@ -94,11 +94,27 @@ describe("sitemap.xml", () => {
     expect(entries.every((e) => !e.url.includes("/vectors/"))).toBe(true);
   });
 
-  it("ranks the services route above the reagent catalogs", async () => {
+  it("ranks the CRO services page above the reagent catalogs", async () => {
+    // Contract research is ~90% of revenue, and the AI-search review found
+    // BioGrammatics being classified as a reagent supplier. The services page
+    // outranking the catalogs is the sitemap's half of fixing that.
     const entries = await sitemap();
     const priority = (suffix: string) =>
       entries.find((e) => e.url.endsWith(suffix))?.priority ?? 0;
 
-    expect(priority("/path-to-protein")).toBeGreaterThan(priority("/vectors"));
+    expect(priority("/pichia-protein-expression-services")).toBeGreaterThan(
+      priority("/vectors")
+    );
+    expect(priority("/pichia-protein-expression-services")).toBeGreaterThan(
+      priority("/products")
+    );
+  });
+
+  it("lists the CRO services page second only to the homepage", async () => {
+    const entries = await sitemap();
+    const staticUrls = entries.map((e) => e.url);
+
+    expect(staticUrls[0]).toMatch(/\/$/);
+    expect(staticUrls[1]).toMatch(/\/pichia-protein-expression-services$/);
   });
 });
