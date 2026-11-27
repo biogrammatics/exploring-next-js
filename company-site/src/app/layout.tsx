@@ -5,6 +5,7 @@ import { AuthSessionProvider } from "@/app/components/auth/session-provider";
 import { UserMenu } from "@/app/components/auth/user-menu";
 import { CartProvider } from "@/app/components/cart/cart-context";
 import { CartIcon } from "@/app/components/cart/cart-icon";
+import { BackgroundVideo } from "@/app/components/background-video";
 import { isIndexable, SITE_NAME, siteUrl } from "@/lib/site";
 import "./globals.css";
 
@@ -46,7 +47,11 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {/* Animated gradient background */}
+        {/*
+          Background stack. The gradients stay mounted underneath the video
+          as its fallback — see the comment above `.gradient-bg` in
+          globals.css for the layering and when each one paints.
+        */}
         <div className="gradient-bg">
           <div className="g1" />
           <div className="g2" />
@@ -54,6 +59,7 @@ export default function RootLayout({
           <div className="g4" />
           <div className="g5" />
         </div>
+        <BackgroundVideo />
         <AuthSessionProvider>
           <CartProvider>
             <header className="glass-nav sticky top-0 z-50">
