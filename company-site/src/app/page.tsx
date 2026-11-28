@@ -104,11 +104,14 @@ export default function Home() {
           </p>
           <div className="grid md:grid-cols-2 gap-8">
             {CRO_SERVICES.map((service) => (
-              <div key={service.title} className="glass-panel p-8">
-                <h3 className="text-xl font-bold mb-3 text-gray-800">
+              <div
+                key={service.title}
+                className="glass-panel-dark p-8 text-center"
+              >
+                <h3 className="text-xl font-bold mb-3 text-white">
                   {service.title}
                 </h3>
-                <p className="text-gray-600 leading-relaxed">{service.body}</p>
+                <p className="text-white/85 leading-relaxed">{service.body}</p>
               </div>
             ))}
           </div>
@@ -133,11 +136,11 @@ export default function Home() {
           </h2>
           <div className="grid md:grid-cols-3 gap-8">
             {DIFFERENTIATORS.map((item) => (
-              <div key={item.title} className="glass-panel p-8">
-                <h3 className="text-xl font-bold mb-3 text-gray-800">
+              <div key={item.title} className="glass-panel-dark p-8 text-center">
+                <h3 className="text-xl font-bold mb-3 text-white">
                   {item.title}
                 </h3>
-                <p className="text-gray-600 leading-relaxed">{item.body}</p>
+                <p className="text-white/85 leading-relaxed">{item.body}</p>
               </div>
             ))}
           </div>
@@ -147,8 +150,8 @@ export default function Home() {
       {/* Mission Statement */}
       <section className="py-16 px-4">
         <div className="container mx-auto max-w-4xl">
-          <div className="glass-panel p-8 md:p-12 text-center">
-            <p className="text-lg md:text-xl text-gray-700 leading-relaxed">
+          <div className="glass-panel-dark p-8 md:p-12 text-center">
+            <p className="text-lg md:text-xl text-white/90 leading-relaxed">
               At BioGrammatics, our mission is to advance scientific research and
               catalyze innovation to meet global challenges. Our strategy is to
               provide superior protein expression solutions, anchored by the
@@ -166,17 +169,17 @@ export default function Home() {
           audience it serves. */}
       <section className="py-16 px-4">
         <div className="container mx-auto max-w-4xl">
-          <div className="glass-panel p-8 md:p-12">
-            <h2 className="text-2xl md:text-3xl font-bold mb-4 text-gray-800">
+          <div className="glass-panel-dark p-8 md:p-12 text-center">
+            <h2 className="text-2xl md:text-3xl font-bold mb-4 text-white">
               Prefer to develop your own strains?
             </h2>
-            <p className="text-gray-600 mb-6 leading-relaxed">
+            <p className="text-white/85 mb-6 leading-relaxed">
               We also supply the same tools we use. Pichia expression vectors,
               engineered host strains, competent cells and DNA synthesis
               subscriptions, available to laboratories developing strains
               in-house.
             </p>
-            <div className="flex gap-4 flex-wrap">
+            <div className="flex gap-4 flex-wrap justify-center">
               <Link
                 href="/vectors"
                 className="inline-block glass-button text-white px-6 py-2 rounded-lg"
@@ -185,7 +188,7 @@ export default function Home() {
               </Link>
               <Link
                 href="/strains"
-                className="inline-block px-6 py-2 rounded-lg bg-white/60 backdrop-blur border border-white/40 text-gray-800 hover:bg-white/80 transition-all"
+                className="inline-block px-6 py-2 rounded-lg bg-white/20 backdrop-blur border border-white/30 text-white hover:bg-white/30 transition-all"
               >
                 Browse Strains
               </Link>
@@ -199,38 +202,38 @@ export default function Home() {
           anyone using it, which the CRO services page now satisfies. */}
       <section className="py-16 px-4">
         <div className="container mx-auto max-w-4xl">
-          <div className="glass-panel p-8 md:p-12">
-            <h2 className="text-3xl font-bold mb-4 text-gray-800 text-center">
+          <div className="glass-panel-dark p-8 md:p-12 text-center">
+            <h2 className="text-3xl font-bold mb-4 text-white">
               Your Path to Protein
             </h2>
-            <p className="text-gray-600 mb-8 text-center text-lg">
+            <p className="text-white/85 mb-8 text-lg">
               Design a strain interactively and send it to us as a project
               request — or use it to scope what you need before you get in touch.
             </p>
             <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8">
               <div className="text-center">
-                <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <span className="text-blue-600 font-bold">1-6</span>
+                <div className="w-12 h-12 bg-blue-400/25 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <span className="text-blue-100 font-bold">1-6</span>
                 </div>
-                <p className="text-sm text-gray-700">Guided steps from gene to protein</p>
+                <p className="text-sm text-white/85">Guided steps from gene to protein</p>
               </div>
               <div className="text-center">
-                <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <span className="text-purple-600 font-bold">DIY</span>
+                <div className="w-12 h-12 bg-purple-400/25 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <span className="text-purple-100 font-bold">DIY</span>
                 </div>
-                <p className="text-sm text-gray-700">Mix DIY and service options</p>
+                <p className="text-sm text-white/85">Mix DIY and service options</p>
               </div>
               <div className="text-center">
-                <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <span className="text-green-600 font-bold">$</span>
+                <div className="w-12 h-12 bg-green-400/25 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <span className="text-green-100 font-bold">$</span>
                 </div>
-                <p className="text-sm text-gray-700">Instant pricing estimates</p>
+                <p className="text-sm text-white/85">Instant pricing estimates</p>
               </div>
               <div className="text-center">
-                <div className="w-12 h-12 bg-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <span className="text-orange-600 font-bold">Pro</span>
+                <div className="w-12 h-12 bg-orange-400/25 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <span className="text-orange-100 font-bold">Pro</span>
                 </div>
-                <p className="text-sm text-gray-700">Expert recommendations</p>
+                <p className="text-sm text-white/85">Expert recommendations</p>
               </div>
             </div>
             <div className="text-center">
@@ -248,19 +251,19 @@ export default function Home() {
       {/* Footer */}
       <footer className="py-8 px-4 mt-16">
         <div className="container mx-auto max-w-5xl">
-          <div className="glass-panel p-6">
+          <div className="glass-panel-dark p-6">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-              <p className="text-gray-600">
+              <p className="text-white/75">
                 &copy; 2026 BioGrammatics. All rights reserved.
               </p>
               <div className="flex gap-6">
-                <Link href="/privacy" className="text-gray-600 hover:text-gray-800">
+                <Link href="/privacy" className="text-white/75 hover:text-white">
                   Privacy Policy
                 </Link>
-                <Link href="/terms" className="text-gray-600 hover:text-gray-800">
+                <Link href="/terms" className="text-white/75 hover:text-white">
                   Terms &amp; Conditions
                 </Link>
-                <Link href="/cookies" className="text-gray-600 hover:text-gray-800">
+                <Link href="/cookies" className="text-white/75 hover:text-white">
                   Cookie Policy
                 </Link>
               </div>

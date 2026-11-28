@@ -226,16 +226,16 @@ export default function PichiaProteinExpressionServicesPage() {
     <main className="min-h-screen py-12 px-4">
       <div className="container mx-auto max-w-5xl space-y-8">
         {/* Hero */}
-        <section className="glass-panel p-8 md:p-12">
-          <h1 className="text-3xl md:text-5xl font-bold mb-4 text-gray-900">
+        <section className="glass-panel-dark p-8 md:p-12">
+          <h1 className="text-3xl md:text-5xl font-bold mb-4 text-white">
             <em>Pichia pastoris</em> Protein Expression Services
           </h1>
-          <p className="text-lg md:text-xl text-gray-700 mb-8">
+          <p className="text-lg md:text-xl text-white/85 mb-8">
             Specialist contract research and custom strain development in{" "}
             <em>Komagataella phaffii</em>. From gene sequence to a
             sequence-verified expression strain.
           </p>
-          <div className="space-y-4 text-gray-700 leading-relaxed">
+          <div className="space-y-4 text-white/85 leading-relaxed">
             <p>
               BioGrammatics is a contract research organization dedicated to
               recombinant protein expression in the methylotrophic yeast{" "}
@@ -266,7 +266,7 @@ export default function PichiaProteinExpressionServicesPage() {
             </Link>
             <Link
               href="/vectors"
-              className="px-8 py-3 rounded-lg text-lg bg-white/60 backdrop-blur border border-white/40 text-gray-800 hover:bg-white/80 transition-all"
+              className="px-8 py-3 rounded-lg text-lg bg-white/20 backdrop-blur border border-white/30 text-white hover:bg-white/30 transition-all"
             >
               Browse vectors and strains
             </Link>
@@ -274,20 +274,20 @@ export default function PichiaProteinExpressionServicesPage() {
         </section>
 
         {/* What we do */}
-        <section className="glass-panel p-8 md:p-12">
-          <h2 className="text-2xl md:text-3xl font-bold mb-8 text-gray-900">
+        <section className="glass-panel-dark p-8 md:p-12">
+          <h2 className="text-2xl md:text-3xl font-bold mb-8 text-white">
             What we do
           </h2>
           <div className="grid md:grid-cols-2 gap-8">
             {SERVICES.map((service) => (
               <div key={service.title}>
-                <h3 className="text-xl font-bold mb-3 text-gray-800">
+                <h3 className="text-xl font-bold mb-3 text-white">
                   {service.title}
                 </h3>
                 {service.body.map((paragraph) => (
                   <p
                     key={paragraph}
-                    className="text-gray-700 leading-relaxed mb-3"
+                    className="text-white/85 leading-relaxed mb-3"
                   >
                     {paragraph}
                   </p>
@@ -298,11 +298,11 @@ export default function PichiaProteinExpressionServicesPage() {
         </section>
 
         {/* What you receive */}
-        <section className="glass-panel p-8 md:p-12">
-          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-gray-900">
+        <section className="glass-panel-dark p-8 md:p-12">
+          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white">
             What you receive
           </h2>
-          <p className="text-gray-700 mb-6">
+          <p className="text-white/85 mb-6">
             Every project delivers a validated strain. Analytical work is added
             to it as the project requires.
           </p>
@@ -310,14 +310,14 @@ export default function PichiaProteinExpressionServicesPage() {
             <table className="w-full text-left border-collapse">
               <tbody>
                 {DELIVERABLES.map((item) => (
-                  <tr key={item.name} className="border-b border-gray-300/60">
+                  <tr key={item.name} className="border-b border-white/20">
                     <th
                       scope="row"
-                      className="align-top py-4 pr-4 md:pr-6 font-bold text-gray-800 md:w-64 md:min-w-56"
+                      className="align-top py-4 pr-4 md:pr-6 font-bold text-white md:w-64 md:min-w-56"
                     >
                       {item.name}
                     </th>
-                    <td className="align-top py-4 text-gray-700 leading-relaxed">
+                    <td className="align-top py-4 text-white/85 leading-relaxed">
                       {item.detail}
                     </td>
                   </tr>
@@ -325,18 +325,18 @@ export default function PichiaProteinExpressionServicesPage() {
               </tbody>
             </table>
           </div>
-          <p className="text-gray-700 mt-6">
+          <p className="text-white/85 mt-6">
             Fermentation development, purification, larger material quantities
             and additional analytics are available on discussion.
           </p>
         </section>
 
         {/* Design options */}
-        <section className="glass-panel p-8 md:p-12">
-          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-gray-900">
+        <section className="glass-panel-dark p-8 md:p-12">
+          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white">
             Design options
           </h2>
-          <p className="text-gray-700 mb-6">
+          <p className="text-white/85 mb-6">
             Projects are built from a defined and documented set of components
             rather than a single house protocol. The choices below are made with
             you at the design stage.
@@ -345,14 +345,14 @@ export default function PichiaProteinExpressionServicesPage() {
             <table className="w-full text-left border-collapse">
               <tbody>
                 {DESIGN_OPTIONS.map((row) => (
-                  <tr key={row.component} className="border-b border-gray-300/60">
+                  <tr key={row.component} className="border-b border-white/20">
                     <th
                       scope="row"
-                      className="align-top py-4 pr-4 md:pr-6 font-bold text-gray-800 md:w-56 md:min-w-48"
+                      className="align-top py-4 pr-4 md:pr-6 font-bold text-white md:w-56 md:min-w-48"
                     >
                       {row.component}
                     </th>
-                    <td className="align-top py-4 text-gray-700 leading-relaxed">
+                    <td className="align-top py-4 text-white/85 leading-relaxed">
                       {row.options}
                     </td>
                   </tr>
@@ -363,20 +363,20 @@ export default function PichiaProteinExpressionServicesPage() {
         </section>
 
         {/* Where we are strongest */}
-        <section className="glass-panel p-8 md:p-12">
-          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-gray-900">
+        <section className="glass-panel-dark p-8 md:p-12">
+          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white">
             Where we are strongest
           </h2>
-          <p className="text-gray-700 mb-6">
+          <p className="text-white/85 mb-6">
             Our differentiation is molecular biology and strain engineering
             rather than scale. Specifically:
           </p>
           <ul className="space-y-4">
             {STRENGTHS.map((strength) => (
               <li key={strength.lead} className="flex gap-3">
-                <span className="mt-2 w-2 h-2 shrink-0 bg-blue-500 rounded-full" />
-                <p className="text-gray-700 leading-relaxed">
-                  <strong className="text-gray-900">{strength.lead}</strong>{" "}
+                <span className="mt-2 w-2 h-2 shrink-0 bg-blue-300 rounded-full" />
+                <p className="text-white/85 leading-relaxed">
+                  <strong className="text-white">{strength.lead}</strong>{" "}
                   {strength.body}
                 </p>
               </li>
@@ -385,26 +385,26 @@ export default function PichiaProteinExpressionServicesPage() {
         </section>
 
         {/* Reagent storefront — secondary */}
-        <section className="glass-panel p-8 md:p-12">
-          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-gray-900">
+        <section className="glass-panel-dark p-8 md:p-12 text-center">
+          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white">
             Prefer to build your own strains?
           </h2>
-          <p className="text-gray-700 mb-6">
+          <p className="text-white/85 mb-6 max-w-2xl mx-auto">
             We also supply the same tools we use. Our catalogue of Pichia
             expression vectors, engineered host strains, competent cells and
             related reagents is available to laboratories developing strains
             in-house.
           </p>
-          <div className="flex gap-4 flex-wrap">
+          <div className="flex gap-4 flex-wrap justify-center">
             <Link
               href="/vectors"
-              className="inline-block px-6 py-2 rounded-lg bg-white/60 backdrop-blur border border-white/40 text-gray-800 hover:bg-white/80 transition-all"
+              className="inline-block px-6 py-2 rounded-lg bg-white/20 backdrop-blur border border-white/30 text-white hover:bg-white/30 transition-all"
             >
               Browse vectors
             </Link>
             <Link
               href="/strains"
-              className="inline-block px-6 py-2 rounded-lg bg-white/60 backdrop-blur border border-white/40 text-gray-800 hover:bg-white/80 transition-all"
+              className="inline-block px-6 py-2 rounded-lg bg-white/20 backdrop-blur border border-white/30 text-white hover:bg-white/30 transition-all"
             >
               Browse strains
             </Link>
@@ -412,11 +412,11 @@ export default function PichiaProteinExpressionServicesPage() {
         </section>
 
         {/* Start a project */}
-        <section className="glass-panel p-8 md:p-12 text-center">
-          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-gray-900">
+        <section className="glass-panel-dark p-8 md:p-12 text-center">
+          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white">
             Start a project
           </h2>
-          <p className="text-gray-700 mb-8 max-w-2xl mx-auto">
+          <p className="text-white/85 mb-8 max-w-2xl mx-auto">
             Tell us about your protein and what you need from it. Our scientists
             review every enquiry directly and respond with options, not a form
             letter.

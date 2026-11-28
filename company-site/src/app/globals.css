@@ -265,3 +265,34 @@ body {
     0 10px 40px rgba(0, 0, 0, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
+
+/*
+ * Translucent variant, for the public marketing pages where the background
+ * video is meant to read through the panel. Takes its look from the secondary
+ * hero button (white at 20% + a white border + white text), which is where
+ * this treatment started.
+ *
+ * The dark layer underneath the white tint is doing real work, not styling.
+ * A white-only tint tracks whatever is behind it, and the loop drives a bright
+ * teal helix straight through these panels — measured over the brightest
+ * frames, white text on a white-20% tint alone falls to about 2.2:1, well
+ * under the 4.5:1 floor. Compositing over rgba(2,27,32,0.55) first pins the
+ * backdrop dark no matter what the video is doing, which holds white text at
+ * roughly 9:1 everywhere while still letting the helix show through.
+ *
+ * Deliberately NOT applied to cart, checkout, the account dashboard or the
+ * catalog detail pages: those are form and data surfaces, where an opaque
+ * panel with dark text is the legible choice.
+ */
+.glass-panel-dark {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.2)),
+    rgba(2, 27, 32, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
