@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DismissToReturn } from "@/app/components/dismiss-to-return";
 
 export const metadata = {
   // Bare title: the root layout's template appends "| BioGrammatics".
@@ -8,7 +9,7 @@ export const metadata = {
 
 export default function TermsPage() {
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <DismissToReturn>
       <div className="bg-white rounded-xl border border-gray-200 p-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Terms and Conditions</h1>
         <p className="text-gray-500 mb-8">Effective date: March 5, 2026</p>
@@ -263,6 +264,6 @@ export default function TermsPage() {
           </div>
         </div>
       </div>
-    </div>
+    </DismissToReturn>
   );
 }

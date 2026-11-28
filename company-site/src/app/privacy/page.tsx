@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DismissToReturn } from "@/app/components/dismiss-to-return";
 
 export const metadata = {
   // Bare title: the root layout's template appends "| BioGrammatics".
@@ -14,7 +15,7 @@ export default function PrivacyPolicyPage() {
   });
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <DismissToReturn>
       <div className="bg-white rounded-xl border border-gray-200 p-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
         <p className="text-gray-500 mb-8">Last updated: {currentDate}</p>
@@ -351,6 +352,6 @@ export default function PrivacyPolicyPage() {
           </div>
         </div>
       </div>
-    </div>
+    </DismissToReturn>
   );
 }
