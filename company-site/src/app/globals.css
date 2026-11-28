@@ -33,10 +33,16 @@ html {
  *   .background-video (-1) the DNA loop     — primary
  *   page content    (0+)
  *
- * The video is the primary background; the gradients stay mounted beneath it
- * and show through whenever it cannot paint — unsupported codecs, autoplay
- * refused, reduced-motion, or simply before the first frame arrives. Nothing
- * here is conditional in JS, so the whole thing stays a Server Component.
+ * The video is the primary background. Its wrapper paints an opaque backdrop
+ * (mean frame colour, then the poster still), so the common non-playing cases
+ * — still loading, autoplay refused, reduced motion — show a frame of the same
+ * footage rather than an unrelated gradient. The gradients remain the final
+ * fallback beneath, for when the poster itself cannot load.
+ *
+ * CSS cannot tell "still loading" from "failed", so a flash-free load and
+ * gradients-on-failure cannot both hold without client-side JS. The flash was
+ * certain and hit everyone; total video failure is near-impossible with H.264
+ * in the stack. Nothing here is conditional, so this stays a Server Component.
  */
 
 /* Rotating gradient backgrounds with smooth opacity fades */
@@ -46,24 +52,41 @@ html {
   z-index: -2;
 }
 
+/*
+ * The wrapper paints the backdrop so the gradients never flash through while
+ * the video loads. `background-color` is the measured mean colour of all 600
+ * frames of the loop — zero bytes, so it is on screen at first paint — and the
+ * 21 KB poster lands on top of it well before 1.9 MB of video.
+ */
 .background-video {
   position: fixed;
   inset: 0;
   z-index: -1;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  background-color: #021b20;
+  background-image: image-set(
+    url("/video/dna-helix-poster.avif") type("image/avif"),
+    url("/video/dna-helix-poster.jpg") type("image/jpeg")
+  );
+  background-size: cover;
+  background-position: center;
   /* Decorative only — never swallow a click meant for the page. */
   pointer-events: none;
 }
 
+.background-video video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 /*
- * Reduced motion: drop the video AND freeze the gradient rotation, otherwise
- * honouring the preference would just swap one animation for another. The
- * first gradient is pinned visible as the static backdrop.
+ * Reduced motion: drop the video, leaving the poster still on the wrapper, and
+ * freeze the gradient rotation underneath — otherwise honouring the preference
+ * would just swap one animation for another.
  */
 @media (prefers-reduced-motion: reduce) {
-  .background-video {
+  .background-video video {
     display: none;
   }
 
