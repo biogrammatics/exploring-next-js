@@ -227,7 +227,7 @@ export default function PichiaProteinExpressionServicesPage() {
       <div className="container mx-auto max-w-5xl space-y-8">
         {/* Hero */}
         <section className="glass-panel-dark p-8 md:p-12">
-          <h1 className="text-3xl md:text-5xl font-bold mb-4 text-white">
+          <h1 className="text-3xl md:text-5xl font-bold mb-4 text-white text-center">
             <em>Pichia pastoris</em> Protein Expression Services
           </h1>
           <p className="text-lg md:text-xl text-white/85 mb-8">
@@ -275,7 +275,7 @@ export default function PichiaProteinExpressionServicesPage() {
 
         {/* What we do */}
         <section className="glass-panel-dark p-8 md:p-12">
-          <h2 className="text-2xl md:text-3xl font-bold mb-8 text-white">
+          <h2 className="text-2xl md:text-3xl font-bold mb-8 text-white text-center">
             What we do
           </h2>
           <div className="grid md:grid-cols-2 gap-8">
@@ -299,7 +299,7 @@ export default function PichiaProteinExpressionServicesPage() {
 
         {/* What you receive */}
         <section className="glass-panel-dark p-8 md:p-12">
-          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white">
+          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white text-center">
             What you receive
           </h2>
           <p className="text-white/85 mb-6">
@@ -333,7 +333,7 @@ export default function PichiaProteinExpressionServicesPage() {
 
         {/* Design options */}
         <section className="glass-panel-dark p-8 md:p-12">
-          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white">
+          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white text-center">
             Design options
           </h2>
           <p className="text-white/85 mb-6">
@@ -364,7 +364,7 @@ export default function PichiaProteinExpressionServicesPage() {
 
         {/* Where we are strongest */}
         <section className="glass-panel-dark p-8 md:p-12">
-          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white">
+          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white text-center">
             Where we are strongest
           </h2>
           <p className="text-white/85 mb-6">
@@ -385,17 +385,17 @@ export default function PichiaProteinExpressionServicesPage() {
         </section>
 
         {/* Reagent storefront — secondary */}
-        <section className="glass-panel-dark p-8 md:p-12 text-center">
-          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white">
+        <section className="glass-panel-dark p-8 md:p-12">
+          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white text-center">
             Prefer to build your own strains?
           </h2>
-          <p className="text-white/85 mb-6 max-w-2xl mx-auto">
+          <p className="text-white/85 mb-6">
             We also supply the same tools we use. Our catalogue of Pichia
             expression vectors, engineered host strains, competent cells and
             related reagents is available to laboratories developing strains
             in-house.
           </p>
-          <div className="flex gap-4 flex-wrap justify-center">
+          <div className="flex gap-4 flex-wrap">
             <Link
               href="/vectors"
               className="inline-block px-6 py-2 rounded-lg bg-white/20 backdrop-blur border border-white/30 text-white hover:bg-white/30 transition-all"
@@ -412,8 +412,8 @@ export default function PichiaProteinExpressionServicesPage() {
         </section>
 
         {/* Start a project */}
-        <section className="glass-panel-dark p-8 md:p-12 text-center">
-          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white">
+        <section className="glass-panel-dark p-8 md:p-12">
+          <h2 className="text-2xl md:text-3xl font-bold mb-3 text-white text-center">
             Start a project
           </h2>
           <p className="text-white/85 mb-8 max-w-2xl mx-auto">

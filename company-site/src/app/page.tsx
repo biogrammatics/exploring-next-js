@@ -104,11 +104,8 @@ export default function Home() {
           </p>
           <div className="grid md:grid-cols-2 gap-8">
             {CRO_SERVICES.map((service) => (
-              <div
-                key={service.title}
-                className="glass-panel-dark p-8 text-center"
-              >
-                <h3 className="text-xl font-bold mb-3 text-white">
+              <div key={service.title} className="glass-panel-dark p-8">
+                <h3 className="text-xl font-bold mb-3 text-white text-center">
                   {service.title}
                 </h3>
                 <p className="text-white/85 leading-relaxed">{service.body}</p>
@@ -136,8 +133,8 @@ export default function Home() {
           </h2>
           <div className="grid md:grid-cols-3 gap-8">
             {DIFFERENTIATORS.map((item) => (
-              <div key={item.title} className="glass-panel-dark p-8 text-center">
-                <h3 className="text-xl font-bold mb-3 text-white">
+              <div key={item.title} className="glass-panel-dark p-8">
+                <h3 className="text-xl font-bold mb-3 text-white text-center">
                   {item.title}
                 </h3>
                 <p className="text-white/85 leading-relaxed">{item.body}</p>
@@ -169,8 +166,8 @@ export default function Home() {
           audience it serves. */}
       <section className="py-16 px-4">
         <div className="container mx-auto max-w-4xl">
-          <div className="glass-panel-dark p-8 md:p-12 text-center">
-            <h2 className="text-2xl md:text-3xl font-bold mb-4 text-white">
+          <div className="glass-panel-dark p-8 md:p-12">
+            <h2 className="text-2xl md:text-3xl font-bold mb-4 text-white text-center">
               Prefer to develop your own strains?
             </h2>
             <p className="text-white/85 mb-6 leading-relaxed">
@@ -179,7 +176,7 @@ export default function Home() {
               subscriptions, available to laboratories developing strains
               in-house.
             </p>
-            <div className="flex gap-4 flex-wrap justify-center">
+            <div className="flex gap-4 flex-wrap">
               <Link
                 href="/vectors"
                 className="inline-block glass-button text-white px-6 py-2 rounded-lg"
@@ -202,8 +199,8 @@ export default function Home() {
           anyone using it, which the CRO services page now satisfies. */}
       <section className="py-16 px-4">
         <div className="container mx-auto max-w-4xl">
-          <div className="glass-panel-dark p-8 md:p-12 text-center">
-            <h2 className="text-3xl font-bold mb-4 text-white">
+          <div className="glass-panel-dark p-8 md:p-12">
+            <h2 className="text-3xl font-bold mb-4 text-white text-center">
               Your Path to Protein
             </h2>
             <p className="text-white/85 mb-8 text-lg">
